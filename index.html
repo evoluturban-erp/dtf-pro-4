@@ -155,7 +155,21 @@ html,body{height:100%;max-height:100vh;overflow:hidden}
       <div style="width:52px;height:52px;background:var(--green-bg);border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
         <i class="ti ti-printer" style="font-size:26px;color:var(--green)"></i>
       </div>
-      
+      <h2 style="font-size:20px;font-weight:600;color:var(--text)">DTF Pro</h2>
+      <p style="font-size:13px;color:var(--text2);margin-top:4px">Sistema de Gestao de Producao</p>
+    </div>
+    <div class="f">
+      <label>Login</label>
+      <input id="l-login" type="text" placeholder="seu login" autocomplete="username">
+    </div>
+    <div class="f">
+      <label>Senha</label>
+      <input id="l-senha" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button class="btn btn-p btn-full" onclick="doLogin()" style="margin-top:4px">
+      <i class="ti ti-login"></i> Entrar
+    </button>
+    <p id="login-erro" style="color:var(--red);font-size:12px;text-align:center;margin-top:10px;min-height:16px"></p>
   </div>
 </div>
 
@@ -298,10 +312,12 @@ async function loadUsersFromSheets(){try{var rows=await apiGet('usuarios',false)
 
 function doLogin(){
   var login=v('l-login').trim(),senha=v('l-senha');
-  if(!login||!senha){toast('Preencha login e senha');return;}
+  var erroEl=$('login-erro');
+  if(erroEl)erroEl.textContent='';
+  if(!login||!senha){if(erroEl)erroEl.textContent='Preencha login e senha';toast('Preencha login e senha');return;}
   var u=getUsers().find(function(u){return u.login===login&&u.senha===senha;});
-  if(!u){toast('Login ou senha incorretos');return;}
-  if(u.ativo===false){toast('Acesso bloqueado. Contate o administrador.');return;}
+  if(!u){if(erroEl)erroEl.textContent='Login ou senha incorretos';toast('Login ou senha incorretos');return;}
+  if(u.ativo===false){if(erroEl)erroEl.textContent='Acesso bloqueado. Contate o administrador.';toast('Acesso bloqueado. Contate o administrador.');return;}
   CU=u;store.set('dtf_session',u);
   $('login-page').classList.add('hidden');$('shell').classList.remove('hidden');initShell();
 }
