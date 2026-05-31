@@ -803,13 +803,34 @@ async function confirmarFechamento(){
   var totM=sel.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
   var de=v('fech-de'),ate=v('fech-ate')||today();var venc=calcVencimento(cli&&cli.ciclo,ate);
   var porDia={};sel.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
+
+  // Verifica se ja existe cobranca pendente para esse cliente
+  var finRows=await apiGet('financeiro',true);
+  var cobExist=finRows.slice(1).find(function(r){
+    return String(r[3]||'').toLowerCase()===cliNome.toLowerCase()
+      && String(r[2]||'')==='receber'
+      && String(r[8]||'')!=='recebido'
+      && String(r[9]||'').indexOf('fechamento')>-1;
+  });
+  var isAtualizacao=!!cobExist;
+  var tsExist=cobExist?String(cobExist[0]||''):'';
+
   var saldoH='';if(saldoDev>0)saldoH='<div style="background:var(--amber-bg);border:1px solid #ffd97a;border-radius:var(--radius);padding:10px 14px;margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center"><div><p style="font-size:11px;font-weight:600;color:var(--amber);text-transform:uppercase">Saldo devedor anterior</p></div><p style="font-size:16px;font-weight:700;color:var(--amber)">'+fmtR(saldoDev)+'</p></div></div>';
   var jobsH='';Object.keys(porDia).sort().forEach(function(dia){var jobs=porDia[dia];var jR=jobs.map(function(r){return '<tr><td style="padding:5px 0;border-bottom:1px solid var(--border);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:280px">'+(r[10]||r[3]||'-')+'</td><td style="padding:5px 0;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;color:var(--text2)">'+fmt(r[5])+'m</td><td style="padding:5px 0;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap;font-weight:500;padding-left:12px">'+fmtR(r[7])+'</td></tr>';}).join('');jobsH+='<div style="margin-bottom:10px"><p style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;margin-bottom:4px"><i class="ti ti-calendar" style="font-size:12px"></i> '+fmtData(dia)+'</p><table style="width:100%;border-collapse:collapse;font-size:13px">'+jR+'</table></div>';});
   var totH='<div style="border-top:2px solid var(--border);padding-top:12px;margin-top:4px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--text2)">Total metragem:</span><strong>'+fmt(totM)+'m</strong></div><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--text2)">Subtotal servicos:</span><strong>'+fmtR(totSvc)+'</strong></div>'+(saldoDev>0?'<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;color:var(--amber)"><span>+ Saldo devedor anterior:</span><strong>'+fmtR(saldoDev)+'</strong></div><div style="height:1px;background:var(--border);margin-bottom:6px"></div>':'')+'<div style="display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:var(--green)"><span>TOTAL GERAL:</span><span>'+fmtR(totV)+'</span></div></div>';
   var pixH=conta?'<div style="background:var(--green-bg);border:1px solid var(--green-mid);border-radius:var(--radius);padding:10px 14px;margin-top:14px"><p style="font-size:11px;font-weight:600;color:var(--green);text-transform:uppercase;margin-bottom:4px">Dados para pagamento</p><p style="font-size:13px;font-weight:500">'+(conta.tipo==='pix'?'Pix':'Transferencia')+' - '+conta.desc+'</p><p style="font-size:14px;font-weight:700;color:var(--green)">'+conta.chave+'</p>'+(conta.fav?'<p style="font-size:12px;color:var(--green)">Favorecido: '+conta.fav+'</p>':'')+'</div>':'';
+
+  // Banner de atualizacao se ja existia cobranca
+  var atualizH=isAtualizacao?'<div style="background:var(--amber-bg);border:1px solid #ffd97a;border-radius:var(--radius);padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px"><i class="ti ti-refresh" style="color:var(--amber)"></i><span style="font-size:12px;color:var(--amber)"><strong>Cobranca atualizada</strong> — a cobranca anterior pendente deste cliente sera substituida pelo novo valor.</span></div>':'';
+
   var el=$('fech-res');if(!el)return;
-  var cliSafe=cliNome.replace(/\\/g,'\\\\').replace(/'/g,"\\'");var ctChave=conta?conta.chave.replace(/\\/g,'\\\\').replace(/'/g,"\\'"):'';var ctDesc=conta?conta.desc.replace(/\\/g,'\\\\').replace(/'/g,"\\'"):'';
+  var cliSafe=cliNome.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var ctChave=conta?conta.chave.replace(/\\/g,'\\\\').replace(/'/g,"\\'"):'';
+  var ctDesc=conta?conta.desc.replace(/\\/g,'\\\\').replace(/'/g,"\\'"):'';
+  var tsSafe=tsExist.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
   el.innerHTML='<div class="card" id="doc-fechamento" style="margin-top:0">'
+    +atualizH
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--border)"><div><p style="font-size:20px;font-weight:700">DTF Pro</p><p style="font-size:12px;color:var(--text2)">Documento de Cobranca</p></div><div style="text-align:right"><p style="font-size:12px;color:var(--text2)">Emitido em '+new Date().toLocaleDateString('pt-BR')+'</p><p style="font-size:12px;color:var(--text2)">Vencimento: <strong>'+fmtData(venc)+'</strong></p></div></div>'
     +'<div style="background:var(--surface2);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px"><p style="font-size:11px;color:var(--text3);text-transform:uppercase;margin-bottom:2px">Cliente</p><p style="font-size:15px;font-weight:600">'+cliNome+'</p><p style="font-size:12px;color:var(--text2)">'+(de?fmtData(de)+' a ':'')+fmtData(ate)+' - '+(cli&&cli.ciclo||'avulso')+'</p></div>'
     +saldoH+jobsH+totH+pixH+'</div>'
@@ -817,7 +838,7 @@ async function confirmarFechamento(){
     +'<button class="btn btn-p" onclick="window.print()" style="justify-content:center"><i class="ti ti-printer"></i> Imprimir</button>'
     +'<button class="btn btn-b" onclick="salvarHTMLFech(\''+cliSafe+'\')" style="justify-content:center"><i class="ti ti-file-type-pdf"></i> Salvar PDF</button>'
     +'<button class="btn" onclick="enviarWAFech(\''+cliSafe+'\','+totM+','+totV+',\''+venc+'\',\''+ctChave+'\','+saldoDev+')" style="justify-content:center;background:#25D366;color:#fff;border-color:#25D366"><i class="ti ti-brand-whatsapp"></i> WhatsApp</button></div>'
-    +'<button class="btn btn-p btn-full" style="margin-top:8px" onclick="lancarCtaReceber(\''+cliSafe+'\','+totV+',\''+venc+'\',\''+ctDesc+'\','+saldoDev+')"><i class="ti ti-currency-dollar"></i> Lancar no financeiro</button>';
+    +'<button class="btn btn-p btn-full" style="margin-top:8px" id="btn-lancar-fin" onclick="lancarCtaReceber(\''+cliSafe+'\','+totV+',\''+venc+'\',\''+ctDesc+'\','+saldoDev+','+(isAtualizacao?'\''+tsSafe+'\'':'null')+')"><i class="ti ti-currency-dollar"></i> '+(isAtualizacao?'Atualizar no financeiro':'Lancar no financeiro')+'</button>';
 }
 
 function salvarHTMLFech(nome){var el=$('doc-fechamento');if(!el){toast('Gere o fechamento primeiro');return;}var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cobranca '+nome+'</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:2rem;max-width:600px;margin:0 auto}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px solid #eee}</style></head><body>'+el.innerHTML+'</body></html>';var b=new Blob([html],{type:'text/html'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='cobranca_'+nome.replace(/ /g,'_')+'_'+today()+'.html';a.click();toast('Arquivo salvo! Abra no navegador e imprima como PDF');}
@@ -836,12 +857,27 @@ function enviarWAFech(nome,totM,totV,venc,chavePix,saldoDev){
   getClientes().then(function(cls){var cli=cls.find(function(c){return c.nome===nome;});var tel=cli&&cli.tel?cli.tel.replace(/[^0-9]/g,''):'';var url=tel?'https://wa.me/55'+tel+'?text='+msg:'https://wa.me/?text='+msg;window.open(url,'_blank');});
 }
 
-async function lancarCtaReceber(nome,valor,venc,ctDesc,saldoDev){
-  var ref=saldoDev>0?'Fechamento '+new Date().toLocaleDateString('pt-BR')+' (incl. saldo '+fmtR(saldoDev)+')':'Fechamento '+new Date().toLocaleDateString('pt-BR');
-  await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),today(),'receber',nome,venc,valor,ref,ctDesc||'Pix','pendente','gerado no fechamento']);
-  var cls=await getClientes();var idx=cls.findIndex(function(c){return c.nome===nome;});
-  if(idx>=0&&saldoDev>0){cls[idx].saldoDevedor=0;saveClientes(cls);syncCliente(cls[idx]);}
-  delete _cache['financeiro'];toast('Conta a receber lancada no financeiro!');
+async function lancarCtaReceber(nome,valor,venc,ctDesc,saldoDev,tsExistente){
+  var btn=$('btn-lancar-fin');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Salvando...';}
+  var ref='Fechamento '+new Date().toLocaleDateString('pt-BR')+(saldoDev>0?' (incl. saldo '+fmtR(saldoDev)+')':'');
+  try{
+    if(tsExistente){
+      // Atualiza cobranca existente via upsert
+      await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        acao:'upsert',aba:'financeiro',key:API_KEY,id_col:0,id_val:tsExistente,
+        headers:['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],
+        row:[tsExistente,today(),'receber',nome,venc,valor,ref,ctDesc||'Pix','pendente','fechamento atualizado em '+new Date().toLocaleString('pt-BR')]
+      })});
+      toast('Cobranca atualizada no financeiro!');
+    }else{
+      await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),today(),'receber',nome,venc,valor,ref,ctDesc||'Pix','pendente','gerado no fechamento']);
+      toast('Cobranca lancada no financeiro!');
+    }
+    var cls=await getClientes();var idx=cls.findIndex(function(c){return c.nome===nome;});
+    if(idx>=0&&saldoDev>0){cls[idx].saldoDevedor=0;saveClientes(cls);syncCliente(cls[idx]);}
+    delete _cache['financeiro'];
+    if(btn){btn.innerHTML='<i class="ti ti-circle-check"></i> '+(tsExistente?'Atualizado!':'Lancado!');btn.style.background='var(--green)';}
+  }catch(e){toast('Erro: '+e.message);if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-currency-dollar"></i> '+(tsExistente?'Atualizar no financeiro':'Lancar no financeiro');}}
 }
 function renderImportar(){$('main-content').innerHTML='<div class="card"><div class="card-title"><i class="ti ti-upload"></i>importar arquivo da impressora</div><div id="drop-zone" style="border:2px dashed var(--border2);border-radius:var(--radius);padding:2rem;text-align:center;color:var(--text2);cursor:pointer;transition:all .15s" onclick="document.getElementById(\'file-imp\').click()" ondragover="event.preventDefault();this.style.background=\'var(--surface2)\'" ondragleave="this.style.background=\'\'" ondrop="onDropImp(event)"><i class="ti ti-file-spreadsheet" style="font-size:40px;display:block;margin-bottom:10px;color:var(--text3)"></i><p style="font-weight:500;margin-bottom:4px">Arraste ou clique para selecionar</p><p style="font-size:12px;color:var(--text3)">producao_AAAA_MM_DTF_01_AZUL.xlsx ou DTF_02_CINZA.xlsx</p></div><input type="file" id="file-imp" accept=".xlsx,.xls" class="hidden" onchange="lerArqImp(this.files[0])"></div><div id="imp-preview"></div>';}
 function onDropImp(e){e.preventDefault();var dz=$('drop-zone');if(dz)dz.style.background='';var f=e.dataTransfer.files[0];if(f)lerArqImp(f);}
@@ -873,9 +909,27 @@ function atualizarContImp(){var sel=_impDados.filter(function(d){return d._sel;}
 
 async function confirmarImp(){
   var sel=_impDados.filter(function(d){return d._sel;});if(!sel.length){toast('Nenhum job selecionado');return;}
-  var btn=document.querySelector('#imp-preview .btn-p');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Lancando...';}
-  var ok=0;for(var i=0;i<sel.length;i++){var d=sel[i];await apiPost('pedidos',['timestamp','data','periodo','cliente','num_pedido','metros','preco_m','total','maquina','status','descricao','obs'],[nowStr(),d.data,'importado',d.cliente,'',d.met,d.vm,d.val,d.imp,'Concluido',d.arquivo,d.obs]);ok++;await new Promise(function(r){setTimeout(r,80);});}
-  toast(ok+' pedidos lancados!');$('imp-preview').innerHTML='<div class="alert alert-g" style="margin-top:10px"><i class="ti ti-circle-check"></i><strong>'+ok+' pedidos importados!</strong></div>';
+  var btn=document.querySelector('#imp-preview .btn-p');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Verificando duplicatas...';}
+  var pedRows=await apiGet('pedidos',true);
+  var jaExiste={};pedRows.slice(1).forEach(function(r){if(r[10])jaExiste[String(r[10]).trim().toLowerCase()]=true;});
+  var novos=sel.filter(function(d){return !jaExiste[String(d.arquivo).trim().toLowerCase()];});
+  var duplic=sel.length-novos.length;
+  if(!novos.length){
+    if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-rocket"></i> Lancar pedidos selecionados';}
+    toast('Nenhum job novo — todos os '+duplic+' ja foram importados antes!');return;
+  }
+  if(duplic>0)toast(duplic+' duplicata(s) ignorada(s), importando '+novos.length+' novo(s)...',4000);
+  if(btn)btn.innerHTML='<span class="spin"></span> Lancando '+novos.length+' novo(s)...';
+  var ok=0;
+  for(var i=0;i<novos.length;i++){
+    var d=novos[i];
+    await apiPost('pedidos',['timestamp','data','periodo','cliente','num_pedido','metros','preco_m','total','maquina','status','descricao','obs'],[nowStr(),d.data,'importado',d.cliente,'',d.met,d.vm,d.val,d.imp,'Concluido',d.arquivo,d.obs]);
+    ok++;await new Promise(function(r){setTimeout(r,80);});
+  }
+  var msg='<div class="alert alert-g" style="margin-top:10px"><i class="ti ti-circle-check"></i><strong>'+ok+' pedido(s) importado(s)!</strong>';
+  if(duplic>0)msg+='<br><span style="font-size:12px;opacity:.8">'+duplic+' duplicata(s) ignorada(s) automaticamente.</span>';
+  msg+='</div>';
+  toast(ok+' pedidos lancados!');$('imp-preview').innerHTML=msg;delete _cache['pedidos'];
 }
 
 var _insItens=[];
