@@ -737,8 +737,37 @@ async function finTab(t,btn){
   }
 }
 
-function imprimirCobranca(cli,ref,val,venc){
-  var css='body{font-family:Arial,sans-serif;font-size:13px;padding:2rem;max-width:620px;margin:0 auto}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px solid #eee}p{margin:0}';
+async function _buscarJobsCliente(cli,ref){
+  // Extrai periodo da referencia ex: "Fechamento 31/05/2026" ou "Fechamento 01/05/2026 a 31/05/2026"
+  var pedRows=await apiGet('pedidos');
+  var jobs=pedRows.slice(1).filter(function(r){
+    return String(r[3]||'').trim().toLowerCase()===cli.trim().toLowerCase()
+      && String(r[9]||'')!=='DELETADO';
+  });
+  // Ordena por data
+  jobs.sort(function(a,b){return String(a[1]).localeCompare(String(b[1]));});
+  return jobs;
+}
+
+async function imprimirCobranca(cli,ref,val,venc){
+  toast('Buscando jobs...');
+  var jobs=await _buscarJobsCliente(cli,ref);
+  var porDia={};
+  jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
+  var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
+
+  var jobsH='';
+  Object.keys(porDia).sort().forEach(function(dia){
+    var jR=porDia[dia].map(function(r){
+      return '<tr><td style="padding:4px 0;border-bottom:1px solid #f0f0f0;font-size:12px">'+(r[10]||'-')+'</td>'
+        +'<td style="padding:4px 0;border-bottom:1px solid #f0f0f0;text-align:right;white-space:nowrap;color:#6b7280;font-size:12px">'+fmt(r[5])+'m</td>'
+        +'<td style="padding:4px 0;border-bottom:1px solid #f0f0f0;text-align:right;white-space:nowrap;font-size:12px;padding-left:8px">'+fmtR(r[7])+'</td></tr>';
+    }).join('');
+    jobsH+='<p style="font-size:11px;font-weight:600;color:#6b7280;text-transform:uppercase;margin:10px 0 4px">'+fmtData(dia)+'</p>'
+      +'<table style="width:100%;border-collapse:collapse">'+jR+'</table>';
+  });
+
+  var css='body{font-family:Arial,sans-serif;font-size:13px;padding:2rem;max-width:620px;margin:0 auto}p{margin:0}@media print{body{padding:1rem}}';
   var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cobranca '+cli+'</title><style>'+css+'</style></head><body>'
     +'<div style="display:flex;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #e5e7eb">'
     +'<div><p style="font-size:20px;font-weight:700">DTF Pro</p><p style="font-size:12px;color:#6b7280">Documento de Cobranca</p></div>'
@@ -747,23 +776,55 @@ function imprimirCobranca(cli,ref,val,venc){
     +'<div style="background:#f9fafb;border-radius:6px;padding:10px 14px;margin-bottom:14px">'
     +'<p style="font-size:11px;color:#9ca3af;text-transform:uppercase;margin:0 0 2px">Cliente</p>'
     +'<p style="font-size:15px;font-weight:600;margin:0">'+cli+'</p>'
-    +'<p style="font-size:12px;color:#6b7280;margin:0">Ref: '+ref+'</p></div>'
-    +'<div style="border-top:2px solid #e5e7eb;padding-top:12px;display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:#16a34a">'
-    +'<span>TOTAL:</span><span>'+fmtR(val)+'</span></div>'
+    +'<p style="font-size:12px;color:#6b7280;margin:4px 0 0">Ref: '+ref+'</p></div>'
+    +jobsH
+    +'<div style="border-top:2px solid #e5e7eb;padding-top:10px;margin-top:12px">'
+    +'<div style="display:flex;justify-content:space-between;font-size:13px;color:#6b7280;margin-bottom:4px"><span>Total metragem:</span><span>'+fmt(totM)+'m</span></div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:#16a34a"><span>TOTAL:</span><span>'+fmtR(val)+'</span></div></div>'
     +'</body></html>';
-  var w=window.open('','_blank');w.document.write(html);w.document.close();w.print();
+  var w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(function(){w.print();},500);
 }
 
-function whatsappCobranca(cli,ref,val,venc){
+async function whatsappCobranca(cli,ref,val,venc){
+  toast('Buscando jobs...');
+  var jobs=await _buscarJobsCliente(cli,ref);
+  var porDia={};jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
+  var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
+  var cls=await getClientes();
+  var c=cls.find(function(x){return x.nome===cli;});
+  var ciclo=c&&c.ciclo?c.ciclo.toLowerCase():'';
+  var cicloTitulo=ciclo==='semanal'?'Fechamento Semanal':ciclo==='quinzenal'?'Fechamento Quinzenal':ciclo==='mensal'?'Fechamento Mensal':'Fechamento Personalizado';
+  var tel=c&&c.tel?c.tel.replace(/[^0-9]/g,''):'';
   var NL='%0A';
-  var p=['*Cobranca DTF Pro*','%F0%9F%91%A4 Cliente: '+encodeURIComponent(cli),'Ref: '+encodeURIComponent(ref),'','*%F0%9F%92%B5 TOTAL: '+encodeURIComponent(fmtR(val))+'*','%F0%9F%93%85 Vencimento: '+encodeURIComponent(fmtData(venc)),'','%F0%9F%93%8B Por favor, confira os itens acima.','Em caso de d%C3%BAvidas, estamos %C3%A0 disposi%C3%A7%C3%A3o! %F0%9F%98%8A','%F0%9F%96%A8%EF%B8%8F EvolutUrban DTF Pro'];
-  var msg=p.join(NL);
-  getClientes().then(function(cls){
-    var c=cls.find(function(x){return x.nome===cli;});
-    var tel=c&&c.tel?c.tel.replace(/[^0-9]/g,''):'';
-    var url=tel?'https://wa.me/55'+tel+'?text='+msg:'https://wa.me/?text='+msg;
-    window.open(url,'_blank');
+  var p=[];
+  p.push('%E2%95%94%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%97');
+  p.push('+++%F0%9F%8E%AF DTF Pro');
+  p.push('+++'+encodeURIComponent(cicloTitulo));
+  p.push('%E2%95%9A%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%9D');
+  p.push('');
+  p.push('%F0%9F%91%A4 Cliente: '+encodeURIComponent(cli));
+  p.push('%F0%9F%93%8B Ref: '+encodeURIComponent(ref));
+  p.push('');
+  p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
+  p.push('%F0%9F%93%8C Servi%C3%A7os:');
+  Object.keys(porDia).sort().forEach(function(dia){
+    p.push('');
+    p.push('%F0%9F%93%85 '+encodeURIComponent(fmtData(dia)));
+    porDia[dia].forEach(function(r){p.push('%E2%80%A2 '+encodeURIComponent((r[10]||'-')+' | '+fmt(r[5])+'m | '+fmtR(r[7])));});
   });
+  p.push('');
+  p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
+  p.push('%F0%9F%93%8F Metragem total: '+encodeURIComponent(fmt(totM)+'m'));
+  p.push('%F0%9F%92%B5 *TOTAL: '+encodeURIComponent(fmtR(val))+'*');
+  if(c&&c.pix)p.push('%F0%9F%8F%A6 Pix: '+encodeURIComponent(c.pix));
+  p.push('');
+  p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
+  p.push('%F0%9F%93%8B Por favor, confira os itens acima.');
+  p.push('Em caso de d%C3%BAvidas, estamos %C3%A0 disposi%C3%A7%C3%A3o%21 %F0%9F%98%8A');
+  p.push('%F0%9F%96%A8%EF%B8%8F EvolutUrban DTF Pro');
+  var msg=p.join(NL).replace(/\+\+\+/g,'   ');
+  var url=tel?'https://wa.me/55'+tel+'?text='+msg:'https://wa.me/?text='+msg;
+  window.open(url,'_blank');
 }
 
 async function darBaixa(ts){
