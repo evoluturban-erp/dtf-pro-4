@@ -786,61 +786,59 @@ async function imprimirCobranca(cli,ref,val,venc){
 }
 
 async function whatsappCobranca(cli,ref,val,venc){
-  // Redireciona para aba Fechamento com cliente pre-selecionado
-  var tabBtn=document.querySelector('.tab-btn:nth-child(3)');
-  finTab('fechamento',tabBtn);
-  // Aguarda renderizar e preenche os campos
-  setTimeout(function(){
-    var selCli=$('fech-cli');
-    if(selCli){
-      selCli.value=cli;
-      // Define periodo do mes atual
-      var hoje=today();
-      var primDia=hoje.substring(0,8)+'01';
-      var fDe=$('fech-de'),fAte=$('fech-ate');
-      if(fDe)fDe.value=primDia;
-      if(fAte)fAte.value=hoje;
-      carregarJobsCliente();
-      toast('Cliente selecionado! Confira os jobs e clique em WhatsApp.');
-    }
-  },400);
-  return; // Remove codigo abaixo
-  var jobs=await _buscarJobsCliente(cli,ref);
+  toast('Buscando jobs...',3000);
+  // Extrai data do fechamento da referencia ex: "Fechamento 31/05/2026"
+  var dateFetch=ref.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  var pedRows=_cache['pedidos']||await apiGet('pedidos');
+  var jobs=[];
+  if(dateFetch){
+    var mes=dateFetch[2],ano=dateFetch[3];
+    jobs=pedRows.slice(1).filter(function(r){
+      if(String(r[3]||'').trim().toLowerCase()!==cli.trim().toLowerCase())return false;
+      if(String(r[9]||'')==='DELETADO')return false;
+      // Filtra pelo mes/ano da referencia
+      var d=String(r[1]||'');
+      return d.indexOf('/'+mes+'/'+ano)>-1||d.indexOf('-'+mes+'-'+ano)>-1||d.indexOf(ano+'-'+mes)>-1;
+    });
+  }
+  // Fallback sem filtro de data
+  if(!jobs.length){
+    jobs=pedRows.slice(1).filter(function(r){
+      return String(r[3]||'').trim().toLowerCase()===cli.trim().toLowerCase()
+        && String(r[9]||'')!=='DELETADO';
+    });
+  }
+  jobs.sort(function(a,b){return String(a[1]).localeCompare(String(b[1]));});
   var porDia={};jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
   var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
   var cls=await getClientes();
   var c=cls.find(function(x){return x.nome===cli;});
-  var ciclo=c&&c.ciclo?c.ciclo.toLowerCase():'';
-  var cicloTitulo=ciclo==='semanal'?'Fechamento Semanal':ciclo==='quinzenal'?'Fechamento Quinzenal':ciclo==='mensal'?'Fechamento Mensal':'Fechamento Personalizado';
   var tel=c&&c.tel?c.tel.replace(/[^0-9]/g,''):'';
-  var NL='%0A';
-  var p=[];
-  p.push('%E2%95%94%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%97');
-  p.push('+++%F0%9F%8E%AF DTF Pro');
-  p.push('+++'+encodeURIComponent(cicloTitulo));
-  p.push('%E2%95%9A%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%9D');
-  p.push('');
-  p.push('%F0%9F%91%A4 Cliente: '+encodeURIComponent(cli));
-  p.push('%F0%9F%93%8B Ref: '+encodeURIComponent(ref));
-  p.push('');
-  p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
-  p.push('%F0%9F%93%8C Servi%C3%A7os:');
+  var ciclo=c&&c.ciclo?c.ciclo.toLowerCase():'';
+  var cicloTitulo=ciclo==='semanal'?'Fechamento Semanal':ciclo==='quinzenal'?'Fechamento Quinzenal':ciclo==='mensal'?'Fechamento Mensal':'Fechamento';
+  var chavePix=c&&c.pix?c.pix:'';
+  var L=[];
+  L.push('*DTF Pro - '+cicloTitulo+'*');
+  L.push('--------------------');
+  L.push('Cliente: '+cli);
+  L.push('Ref: '+ref);
+  L.push('');
+  L.push('*Servicos:*');
   Object.keys(porDia).sort().forEach(function(dia){
-    p.push('');
-    p.push('%F0%9F%93%85 '+encodeURIComponent(fmtData(dia)));
-    porDia[dia].forEach(function(r){p.push('%E2%80%A2 '+encodeURIComponent((r[10]||'-')+' | '+fmt(r[5])+'m | '+fmtR(r[7])));});
+    L.push('');
+    L.push('*'+fmtData(dia)+'*');
+    porDia[dia].forEach(function(r){L.push('- '+(r[10]||r[3]||'-')+' | '+fmt(r[5])+'m | '+fmtR(r[7]));});
   });
-  p.push('');
-  p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
-  p.push('%F0%9F%93%8F Metragem total: '+encodeURIComponent(fmt(totM)+'m'));
-  p.push('%F0%9F%92%B5 *TOTAL: '+encodeURIComponent(fmtR(val))+'*');
-  if(c&&c.pix)p.push('%F0%9F%8F%A6 Pix: '+encodeURIComponent(c.pix));
-  p.push('');
-  p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
-  p.push('%F0%9F%93%8B Por favor, confira os itens acima.');
-  p.push('Em caso de d%C3%BAvidas, estamos %C3%A0 disposi%C3%A7%C3%A3o%21 %F0%9F%98%8A');
-  p.push('%F0%9F%96%A8%EF%B8%8F EvolutUrban DTF Pro');
-  var msg=p.join(NL).replace(/\+\+\+/g,'   ');
+  L.push('');
+  L.push('--------------------');
+  L.push('Metragem total: '+fmt(totM)+'m');
+  L.push('*TOTAL: '+fmtR(val)+'*');
+  if(chavePix)L.push('Pix: '+chavePix);
+  L.push('');
+  L.push('Por favor, confira os itens acima.');
+  L.push('Em caso de duvidas, estamos a disposicao!');
+  L.push('EvolutUrban DTF Pro');
+  var msg=encodeURIComponent(L.join('\n'));
   var url=tel?'https://wa.me/55'+tel+'?text='+msg:'https://wa.me/?text='+msg;
   window.open(url,'_blank');
 }
