@@ -957,14 +957,16 @@ async function confirmarImp(){
   setProgress('Buscando pedidos existentes...',5);
   var pedRows=await apiGet('pedidos',true);
   // Chave unica: arquivo + impressora + data (permite mesmo arquivo em maquinas diferentes no mesmo dia)
+  // Normaliza string: remove espacos duplos e trim
+  function normStr(s){return String(s||'').trim().toLowerCase().replace(/\s+/g,' ');}
   var jaExiste={};pedRows.slice(1).forEach(function(r){
     if(r[10]&&r[1]&&r[8]){
-      var chave=String(r[10]).trim().toLowerCase()+'|'+String(r[8]).trim().toLowerCase()+'|'+String(r[1]).trim();
+      var chave=normStr(r[10])+'|'+normStr(r[8])+'|'+String(r[1]).trim();
       jaExiste[chave]=true;
     }
   });
   var novos=sel.filter(function(d){
-    var chave=String(d.arquivo).trim().toLowerCase()+'|'+String(d.imp).trim().toLowerCase()+'|'+String(d.data).trim();
+    var chave=normStr(d.arquivo)+'|'+normStr(d.imp)+'|'+String(d.data).trim();
     return !jaExiste[chave];
   });
   var duplic=sel.length-novos.length;
