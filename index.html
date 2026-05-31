@@ -631,13 +631,14 @@ function filtrarPedidos(){
   d.forEach(function(r){
     var ts=String(r[0]||'').replace(/'/g,"\'");
     var chk=isAdmin?'<td><input type="checkbox" class="ped-chk" data-ts="'+ts+'"></td>':'';
-    rows+='<tr>'+chk+'<td style="white-space:nowrap">'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[4]||'')+'</td><td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r[10]||'')+'</td><td>'+fmt(r[5])+'m</td><td><strong>'+fmtR(r[7])+'</strong></td><td><span class="badge '+(sc[r[9]]||'b-a')+'">'+(r[9]||'')+'</span></td></tr>';
+    var impBadge=(String(r[8]||'').includes('AZUL')||String(r[8]||'')==='1')?'<span class="badge b-b" style="font-size:10px">Imp.1</span>':'<span class="badge b-g" style="font-size:10px">Imp.2</span>';
+    rows+='<tr>'+chk+'<td style="white-space:nowrap">'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[4]||'')+'</td><td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r[10]||'')+'</td><td>'+impBadge+'</td><td>'+fmt(r[5])+'m</td><td><strong>'+fmtR(r[7])+'</strong></td><td><span class="badge '+(sc[r[9]]||'b-a')+'">'+(r[9]||'')+'</span></td></tr>';
   });
   if(!rows)rows='<tr><td colspan="'+(isAdmin?8:7)+'" style="text-align:center;color:var(--text3)">Nenhum pedido encontrado.</td></tr>';
   var adminBar=isAdmin?'<div id="ped-admin-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:8px 12px;background:var(--surface2);border-radius:var(--radius);border:1px solid var(--border)"><label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="ped-sel-todos" onchange="toggleTodosPed(this.checked)"> Selecionar todos</label><span style="font-size:12px;color:var(--text2)" id="ped-sel-count">0 selecionados</span><button class="btn btn-xs btn-r" id="btn-del-peds" onclick="excluirPedidosSelecionados()" disabled style="margin-left:auto"><i class="ti ti-trash"></i> Excluir selecionados</button></div>':'';
   var thChk=isAdmin?'<th style="width:32px"></th>':'';
   var el=$('ped-lista');
-  if(el){el.innerHTML='<p style="font-size:12px;color:var(--text2);margin-bottom:6px">'+d.length+' pedido(s)</p>'+adminBar+'<div style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - '+(isAdmin?'240':'200')+'px)"><table class="tbl"><thead><tr style="position:sticky;top:0;z-index:1">'+thChk+'<th>Data</th><th>Cliente</th><th>OS</th><th>Descricao</th><th>Metros</th><th>Total</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  if(el){el.innerHTML='<p style="font-size:12px;color:var(--text2);margin-bottom:6px">'+d.length+' pedido(s)</p>'+adminBar+'<div style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - '+(isAdmin?'240':'200')+'px)"><table class="tbl"><thead><tr style="position:sticky;top:0;z-index:1">'+thChk+'<th>Data</th><th>Cliente</th><th>OS</th><th>Descricao</th><th style="white-space:nowrap">Imp.</th><th>Metros</th><th>Total</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   var tbody=el.querySelector('tbody');if(tbody)tbody.addEventListener('change',function(){atualizarContPed();});}
 }
 
@@ -955,8 +956,17 @@ async function confirmarImp(){
 
   setProgress('Buscando pedidos existentes...',5);
   var pedRows=await apiGet('pedidos',true);
-  var jaExiste={};pedRows.slice(1).forEach(function(r){if(r[10])jaExiste[String(r[10]).trim().toLowerCase()]=true;});
-  var novos=sel.filter(function(d){return !jaExiste[String(d.arquivo).trim().toLowerCase()];});
+  // Chave unica: arquivo + impressora + data (permite mesmo arquivo em maquinas diferentes no mesmo dia)
+  var jaExiste={};pedRows.slice(1).forEach(function(r){
+    if(r[10]&&r[1]&&r[8]){
+      var chave=String(r[10]).trim().toLowerCase()+'|'+String(r[8]).trim().toLowerCase()+'|'+String(r[1]).trim();
+      jaExiste[chave]=true;
+    }
+  });
+  var novos=sel.filter(function(d){
+    var chave=String(d.arquivo).trim().toLowerCase()+'|'+String(d.imp).trim().toLowerCase()+'|'+String(d.data).trim();
+    return !jaExiste[chave];
+  });
   var duplic=sel.length-novos.length;
 
   if(!novos.length){
