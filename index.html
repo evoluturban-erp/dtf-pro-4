@@ -786,7 +786,25 @@ async function imprimirCobranca(cli,ref,val,venc){
 }
 
 async function whatsappCobranca(cli,ref,val,venc){
-  toast('Buscando jobs...');
+  // Redireciona para aba Fechamento com cliente pre-selecionado
+  var tabBtn=document.querySelector('.tab-btn:nth-child(3)');
+  finTab('fechamento',tabBtn);
+  // Aguarda renderizar e preenche os campos
+  setTimeout(function(){
+    var selCli=$('fech-cli');
+    if(selCli){
+      selCli.value=cli;
+      // Define periodo do mes atual
+      var hoje=today();
+      var primDia=hoje.substring(0,8)+'01';
+      var fDe=$('fech-de'),fAte=$('fech-ate');
+      if(fDe)fDe.value=primDia;
+      if(fAte)fAte.value=hoje;
+      carregarJobsCliente();
+      toast('Cliente selecionado! Confira os jobs e clique em WhatsApp.');
+    }
+  },400);
+  return; // Remove codigo abaixo
   var jobs=await _buscarJobsCliente(cli,ref);
   var porDia={};jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
   var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
