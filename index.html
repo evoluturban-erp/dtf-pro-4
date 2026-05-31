@@ -626,9 +626,9 @@ function filtrarPedidos(){
   if(q)d=d.filter(function(r){return (r[3]||'').toLowerCase().includes(q)||(r[4]||'').toLowerCase().includes(q);});
   if(st)d=d.filter(function(r){return r[9]===st;});
   var sc={Aguardando:'b-a','Em producao':'b-b',Concluido:'b-g',Entregue:'b-g',importado:'b-gray'};
-  var rows='';d.slice(0,50).forEach(function(r){rows+='<tr><td style="white-space:nowrap">'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[4]||'')+'</td><td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r[10]||'')+'</td><td>'+fmt(r[5])+'m</td><td><strong>'+fmtR(r[7])+'</strong></td><td><span class="badge '+(sc[r[9]]||'b-a')+'">'+(r[9]||'')+'</span></td></tr>';});
+  var rows='';d.forEach(function(r){rows+='<tr><td style="white-space:nowrap">'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[4]||'')+'</td><td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(r[10]||'')+'</td><td>'+fmt(r[5])+'m</td><td><strong>'+fmtR(r[7])+'</strong></td><td><span class="badge '+(sc[r[9]]||'b-a')+'">'+(r[9]||'')+'</span></td></tr>';});
   if(!rows)rows='<tr><td colspan="7" style="text-align:center;color:var(--text3)">Nenhum pedido encontrado.</td></tr>';
-  var el=$('ped-lista');if(el)el.innerHTML='<table class="tbl"><thead><tr><th>Data</th><th>Cliente</th><th>OS</th><th>Descricao</th><th>Metros</th><th>Total</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  var el=$('ped-lista');if(el)el.innerHTML='<p style="font-size:12px;color:var(--text2);margin-bottom:6px">'+d.length+' pedido(s)</p><div style="overflow-x:auto;overflow-y:auto;max-height:calc(100vh - 200px)"><table class="tbl"><thead><tr style="position:sticky;top:0;z-index:1"><th>Data</th><th>Cliente</th><th>OS</th><th>Descricao</th><th>Metros</th><th>Total</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
 async function abrirFormPedido(){
