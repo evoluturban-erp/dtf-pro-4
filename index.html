@@ -308,7 +308,7 @@ var USERS_DEFAULT=[
 var _usersCache=null;
 function getUsers(){if(_usersCache)return _usersCache;try{var s=store.get('dtf_users');if(s&&s.length)return s;}catch(e){}return USERS_DEFAULT;}
 async function syncUser(u){try{await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'upsert',aba:'usuarios',key:API_KEY,id_col:0,id_val:u.id,headers:['id','nome','login','senha','perfil','maquina','ativo'],row:[u.id,u.nome,u.login,u.senha,u.perfil,u.maquina||1,u.ativo!==false]})});}catch(e){}delete _cache['usuarios'];_usersCache=null;store.set('dtf_users',null);}
-async function loadUsersFromSheets(){try{var rows=await apiGet('usuarios',false);if(rows.length>1){var users=rows.slice(1).filter(function(r){return r[0];}).map(function(r){return{id:r[0],nome:r[1]||'',login:r[2]||'',senha:r[3]||'',perfil:r[4]||'operador',maquina:parseInt(r[5])||1,ativo:r[6]!=='false'};});_usersCache=users;store.set('dtf_users',users);return users;}}catch(e){}return getUsers();}
+async function loadUsersFromSheets(){try{var rows=await apiGet('usuarios',false);if(rows.length>1){var users=rows.slice(1).filter(function(r){return r[0]&&r[6]!=='DELETADO';}).map(function(r){return{id:r[0],nome:r[1]||'',login:r[2]||'',senha:r[3]||'',perfil:r[4]||'operador',maquina:parseInt(r[5])||1,ativo:r[6]!=='false'};});_usersCache=users;store.set('dtf_users',users);return users;}}catch(e){}return getUsers();}
 
 function doLogin(){
   var login=v('l-login').trim(),senha=v('l-senha');
@@ -908,7 +908,7 @@ async function renderConfig(){
   var usrs=getUsers(),contas=await getContas(),cfg=store.get('dtf_vis')||{};
   var togs=[['ocultar_valores','Ocultar todos os valores financeiros'],['ocultar_preco','Ocultar preco/m dos clientes'],['ocultar_total','Ocultar valor total dos pedidos']];
   var togH='';togs.forEach(function(t){var at=cfg[t[0]];togH+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)"><span style="font-size:13px">'+t[1]+'</span><button onclick="toggleVis(\''+t[0]+'\')" style="width:44px;height:24px;border-radius:12px;background:'+(at?'var(--green)':'var(--border2)')+';border:none;cursor:pointer;position:relative;transition:background .2s"><span style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:3px;'+(at?'right:3px':'left:3px')+';transition:all .2s;display:block"></span></button></div>';});
-  var usrR='';usrs.forEach(function(u){var at=u.ativo!==false;var aBtn=u.id!==CU.id?'<button onclick="toggleAcesso('+u.id+')" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:none;background:'+(at?'var(--green-bg)':'var(--red-bg)')+';color:'+(at?'var(--green)':'var(--red)')+'"><i class="ti ti-'+(at?'lock-open':'lock')+'" style="font-size:13px"></i>'+(at?'Liberado':'Bloqueado')+'</button>':'<span class="badge b-a">admin</span>';var rBtn=u.id!==CU.id?'<button class="btn btn-xs btn-r" onclick="remUser('+u.id+')"><i class="ti ti-trash"></i></button>':'';usrR+='<tr style="'+(at?'':'opacity:.6')+'"><td><strong>'+u.nome+'</strong></td><td><code style="font-size:12px;background:var(--surface2);padding:1px 6px;border-radius:4px">'+u.login+'</code></td><td><span class="badge '+(u.perfil==='admin'?'b-a':'b-g')+'">'+u.perfil+'</span></td><td>'+(u.maquina?'Imp. '+u.maquina:'-')+'</td><td>'+aBtn+'</td><td>'+rBtn+'</td></tr>';});
+  var usrR='';usrs.forEach(function(u){var at=u.ativo!==false;var aBtn=u.id!==CU.id?'<button onclick="toggleAcesso('+u.id+')" style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:500;cursor:pointer;border:none;background:'+(at?'var(--green-bg)':'var(--red-bg)')+';color:'+(at?'var(--green)':'var(--red)')+'"><i class="ti ti-'+(at?'lock-open':'lock')+'" style="font-size:13px"></i>'+(at?'Liberado':'Bloqueado')+'</button>':'<span class="badge b-a">admin</span>';var rBtn=u.id!==CU.id?'<button class="btn btn-xs btn-r" onclick="remUser('+u.id+')"><i class="ti ti-trash"></i></button>':'';var sBtn=CU.perfil==='admin'&&u.id!==CU.id?'<button class="btn btn-xs" onclick="modalSenha('+u.id+')" style="padding:3px 8px;font-size:11px" title="Alterar senha"><i class="ti ti-key"></i></button>':CU.perfil==='admin'&&u.id===CU.id?'<button class="btn btn-xs" onclick="modalSenhaPropria()" style="padding:3px 8px;font-size:11px" title="Alterar minha senha"><i class="ti ti-key"></i></button>':'';usrR+='<tr style="'+(at?'':'opacity:.6')+'"><td><strong>'+u.nome+'</strong></td><td><code style="font-size:12px;background:var(--surface2);padding:1px 6px;border-radius:4px">'+u.login+'</code></td><td><span class="badge '+(u.perfil==='admin'?'b-a':'b-g')+'">'+u.perfil+'</span></td><td>'+(u.maquina?'Imp. '+u.maquina:'-')+'</td><td>'+aBtn+'</td>'+(CU.perfil==='admin'?'<td>'+sBtn+'</td>':'')+'<td>'+rBtn+'</td></tr>';});
   var ctH='';if(!contas.length)ctH='<p style="font-size:12px;color:var(--text3)">Nenhuma conta cadastrada.</p>';else contas.forEach(function(c,i){ctH+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:var(--radius);margin-bottom:6px"><div style="display:flex;align-items:center;gap:10px"><i class="ti ti-wallet" style="font-size:18px;color:var(--green)"></i><div><p style="font-size:13px;font-weight:500">'+c.desc+'</p><p style="font-size:12px;color:var(--text2)">'+c.chave+(c.fav?' - '+c.fav:'')+'</p></div></div><button class="btn btn-xs btn-r" onclick="remConta('+i+')"><i class="ti ti-trash"></i></button></div>';});
   $('main-content').innerHTML='<div class="card"><div class="card-title"><i class="ti ti-shield"></i>visibilidade para operadores</div>'+togH+'</div>'
     +'<div class="card"><div class="card-title"><i class="ti ti-wallet"></i>minhas contas para recebimento</div><p style="font-size:12px;color:var(--text2);margin-bottom:10px">Cadastre suas contas Pix e bancarias.</p><div id="lista-contas-config">'+ctH+'</div>'
@@ -917,7 +917,7 @@ async function renderConfig(){
     +'<div class="f"><label>Nome do favorecido</label><input id="cc-fav" placeholder="Nome que aparecera no documento"></div>'
     +'<button class="btn btn-p btn-sm" style="margin-top:4px" onclick="addConta()"><i class="ti ti-plus"></i> Adicionar conta</button></div></div>'
     +'<div class="card"><div class="card-title"><i class="ti ti-users"></i>usuarios</div>'
-    +'<table class="tbl" style="margin-bottom:12px"><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Maquina</th><th>Acesso</th><th></th></tr></thead><tbody>'+usrR+'</tbody></table>'
+    +'<table class="tbl" style="margin-bottom:12px"><thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Maquina</th><th>Acesso</th>'+(CU.perfil==='admin'?'<th>Senha</th>':'')+'<th></th></tr></thead><tbody>'+usrR+'</tbody></table>'
     +'<p style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px">Adicionar usuario</p>'
     +'<div class="g3"><div class="f"><label>Nome</label><input id="un-nome"></div><div class="f"><label>Login</label><input id="un-login"></div><div class="f"><label>Senha</label><input id="un-senha"></div></div>'
     +'<div class="g2"><div class="f"><label>Perfil</label><select id="un-perfil"><option value="operador">Operador</option><option value="admin">Admin</option></select></div><div class="f"><label>Maquina</label><select id="un-maq"><option value="1">Impressora 1</option><option value="2">Impressora 2</option></select></div></div>'
@@ -933,7 +933,56 @@ function toggleVis(k){var cfg=store.get('dtf_vis')||{};cfg[k]=!cfg[k];store.set(
 async function addConta(){var tipo=v('cc-tipo'),desc=v('cc-desc').trim(),chave=v('cc-chave').trim(),fav=v('cc-fav').trim();if(!desc||!chave){toast('Preencha descricao e chave');return;}var contas=await getContas();var nova={id:Date.now(),tipo:tipo,desc:desc,chave:chave,fav:fav};contas.push(nova);saveContas(contas);apiPost('contas',['id','tipo','desc','chave','fav'],[nova.id,tipo,desc,chave,fav]);toast('Conta adicionada!');['cc-desc','cc-chave','cc-fav'].forEach(function(id){var el=$(id);if(el)el.value='';});renderConfig();}
 async function remConta(i){if(!confirm('Remover esta conta?'))return;var contas=await getContas();contas.splice(i,1);saveContas(contas);_contasCache=null;delete _cache['contas'];toast('Conta removida');renderConfig();}
 function addUser(){var nome=v('un-nome').trim(),login=v('un-login').trim(),senha=v('un-senha').trim();if(!nome||!login||!senha){toast('Preencha todos os campos');return;}var usrs=getUsers();if(usrs.find(function(u){return u.login===login;})){toast('Login ja existe');return;}var nu={id:Date.now(),nome:nome,login:login,senha:senha,perfil:v('un-perfil'),maquina:parseInt(v('un-maq')),ativo:true};usrs.push(nu);store.set('dtf_users',usrs);_usersCache=usrs;syncUser(nu);toast('Usuario adicionado!');renderConfig();}
-function remUser(id){if(!confirm('Remover?'))return;var usrs=getUsers().filter(function(u){return u.id!==id;});store.set('dtf_users',usrs);_usersCache=usrs;toast('Removido');renderConfig();}
+async function remUser(id){if(!confirm('Remover usuario permanentemente?'))return;var usrs=getUsers().filter(function(u){return u.id!==id;});store.set('dtf_users',usrs);_usersCache=usrs;try{await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'upsert',aba:'usuarios',key:API_KEY,id_col:0,id_val:id,headers:['id','nome','login','senha','perfil','maquina','ativo'],row:[id,'REMOVIDO','','','','','DELETADO']})});}catch(e){}delete _cache['usuarios'];store.set('dtf_users',null);_usersCache=null;toast('Usuario removido!');renderConfig();}
+function modalSenha(id){
+  var u=getUsers().find(function(u){return u.id===id;});
+  if(!u)return;
+  var m=document.createElement('div');m.className='modal-bg';
+  m.innerHTML='<div class="modal" style="max-width:340px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><p style="font-size:15px;font-weight:600">Alterar senha - '+u.nome+'</p><button onclick="this.closest(\'.modal-bg\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--text2)">x</button></div>'
+    +'<div class="f"><label>Nova senha</label><input id="ns-nova" type="password" placeholder="Nova senha"></div>'
+    +'<div class="f"><label>Confirmar senha</label><input id="ns-conf" type="password" placeholder="Repita a senha"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" onclick="this.closest(\'.modal-bg\').remove()">Cancelar</button><button class="btn btn-p" onclick="salvarSenha('+id+')">Salvar</button></div></div>';
+  m.addEventListener('click',function(e){if(e.target===m)m.remove();});document.body.appendChild(m);
+}
+function modalSenhaPropria(){
+  var m=document.createElement('div');m.className='modal-bg';
+  m.innerHTML='<div class="modal" style="max-width:340px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><p style="font-size:15px;font-weight:600">Alterar minha senha</p><button onclick="this.closest(\'.modal-bg\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--text2)">x</button></div>'
+    +'<div class="f"><label>Senha atual</label><input id="ns-atual" type="password" placeholder="Senha atual"></div>'
+    +'<div class="f"><label>Nova senha</label><input id="ns-nova" type="password" placeholder="Nova senha"></div>'
+    +'<div class="f"><label>Confirmar senha</label><input id="ns-conf" type="password" placeholder="Repita a senha"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" onclick="this.closest(\'.modal-bg\').remove()">Cancelar</button><button class="btn btn-p" onclick="salvarSenhaPropria()">Salvar</button></div></div>';
+  m.addEventListener('click',function(e){if(e.target===m)m.remove();});document.body.appendChild(m);
+}
+function salvarSenha(id){
+  var nova=document.getElementById('ns-nova').value.trim();
+  var conf=document.getElementById('ns-conf').value.trim();
+  if(!nova){toast('Digite a nova senha');return;}
+  if(nova!==conf){toast('Senhas nao conferem');return;}
+  if(nova.length<4){toast('Senha muito curta (min 4 caracteres)');return;}
+  var usrs=getUsers();var idx=usrs.findIndex(function(u){return u.id===id;});
+  if(idx<0)return;
+  usrs[idx].senha=nova;
+  store.set('dtf_users',usrs);_usersCache=usrs;
+  syncUser(usrs[idx]);
+  toast('Senha de '+usrs[idx].nome+' alterada!');
+  document.querySelector('.modal-bg').remove();
+}
+function salvarSenhaPropria(){
+  var atual=document.getElementById('ns-atual').value.trim();
+  var nova=document.getElementById('ns-nova').value.trim();
+  var conf=document.getElementById('ns-conf').value.trim();
+  if(atual!==CU.senha){toast('Senha atual incorreta');return;}
+  if(!nova){toast('Digite a nova senha');return;}
+  if(nova!==conf){toast('Senhas nao conferem');return;}
+  if(nova.length<4){toast('Senha muito curta (min 4 caracteres)');return;}
+  var usrs=getUsers();var idx=usrs.findIndex(function(u){return u.id===CU.id;});
+  if(idx<0)return;
+  usrs[idx].senha=nova;CU.senha=nova;
+  store.set('dtf_users',usrs);_usersCache=usrs;store.set('dtf_session',CU);
+  syncUser(usrs[idx]);
+  toast('Sua senha foi alterada!');
+  document.querySelector('.modal-bg').remove();
+}
 function toggleAcesso(id){var usrs=getUsers();var idx=usrs.findIndex(function(u){return u.id===id;});if(idx<0)return;usrs[idx].ativo=usrs[idx].ativo===false?true:false;store.set('dtf_users',usrs);_usersCache=usrs;syncUser(usrs[idx]);toast(usrs[idx].nome+' - acesso '+(usrs[idx].ativo?'liberado':'bloqueado'));renderConfig();}
 
 async function fazerBackup(){var btn=$('btn-backup');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Gerando...';}toast('Buscando dados...aguarde',5000);try{var prod=await apiGet('producao',true),fin=await apiGet('financeiro',true),ped=await apiGet('pedidos',true),ins=await apiGet('insumos',true),cliL=await getClientes();if(typeof XLSX==='undefined'){toast('Erro: biblioteca nao carregada');return;}var wb=XLSX.utils.book_new();var res=[['DTF Pro - Backup'],['Gerado em:',new Date().toLocaleString('pt-BR')],[''],['Fonte','Registros'],['Producao',prod.slice(1).length],['Pedidos',ped.slice(1).length],['Financeiro',fin.slice(1).length],['Insumos',ins.slice(1).length],['Clientes',cliL.length]];XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'Resumo');var cR=[['ID','Nome','CPF/CNPJ','Telefone','Email','Preco/m','Ciclo','Pgto','Pix','Obs','Data Cad.','Saldo Devedor']];cliL.forEach(function(c){cR.push([c.id,c.nome,c.doc||'',c.tel||'',c.email||'',c.preco_m||0,c.ciclo||'',c.pgto||'',c.pix||'',c.obs||'',c.dataCad||'',c.saldoDevedor||0]);});XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cR),'Clientes');[{dados:prod,nome:'Producao'},{dados:ped,nome:'Pedidos'},{dados:fin,nome:'Financeiro'},{dados:ins,nome:'Insumos'}].forEach(function(x){if(!x.dados.length)return;XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(x.dados),x.nome);});var ds=new Date().toLocaleDateString('pt-BR').replace(/\//g,'');XLSX.writeFile(wb,'backup_dtf_'+ds+'.xlsx');toast('Backup salvo! backup_dtf_'+ds+'.xlsx',4000);}catch(e){toast('Erro no backup: '+e.message);}finally{if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-database-export"></i> Fazer backup agora';}}}
