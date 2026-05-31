@@ -936,26 +936,54 @@ function atualizarContImp(){var sel=_impDados.filter(function(d){return d._sel;}
 async function confirmarImp(){
   var sel=_impDados.filter(function(d){return d._sel;});if(!sel.length){toast('Nenhum job selecionado');return;}
   var btn=document.querySelector('#imp-preview .btn-p');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Verificando duplicatas...';}
+
+  // Barra de progresso
+  var progressEl=document.getElementById('imp-progress');
+  if(!progressEl){
+    var pd=document.createElement('div');pd.id='imp-progress';
+    pd.style.cssText='margin-top:12px;background:var(--surface2);border-radius:var(--radius);padding:12px;border:1px solid var(--border)';
+    pd.innerHTML='<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:6px"><span id="imp-prog-label">Verificando...</span><span id="imp-prog-pct">0%</span></div>'
+      +'<div style="background:var(--border);border-radius:4px;height:8px;overflow:hidden"><div id="imp-prog-bar" style="height:100%;width:0%;background:var(--green);border-radius:4px;transition:width .2s"></div></div>';
+    var preview=document.getElementById('imp-preview');if(preview)preview.appendChild(pd);
+    progressEl=pd;
+  }
+  function setProgress(label,pct){
+    var l=document.getElementById('imp-prog-label'),p=document.getElementById('imp-prog-pct'),b=document.getElementById('imp-prog-bar');
+    if(l)l.textContent=label;if(p)p.textContent=pct+'%';if(b)b.style.width=pct+'%';
+    if(pct>=100&&b){b.style.background='var(--green)';}
+  }
+
+  setProgress('Buscando pedidos existentes...',5);
   var pedRows=await apiGet('pedidos',true);
   var jaExiste={};pedRows.slice(1).forEach(function(r){if(r[10])jaExiste[String(r[10]).trim().toLowerCase()]=true;});
   var novos=sel.filter(function(d){return !jaExiste[String(d.arquivo).trim().toLowerCase()];});
   var duplic=sel.length-novos.length;
+
   if(!novos.length){
     if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-rocket"></i> Lancar pedidos selecionados';}
+    setProgress('Nenhum job novo encontrado.',100);
     toast('Nenhum job novo — todos os '+duplic+' ja foram importados antes!');return;
   }
   if(duplic>0)toast(duplic+' duplicata(s) ignorada(s), importando '+novos.length+' novo(s)...',4000);
-  if(btn)btn.innerHTML='<span class="spin"></span> Lancando '+novos.length+' novo(s)...';
+
   var ok=0;
   for(var i=0;i<novos.length;i++){
+    var pct=Math.round(10+(i/novos.length)*88);
+    setProgress('Lancando '+(i+1)+' de '+novos.length+' jobs...',pct);
     var d=novos[i];
     await apiPost('pedidos',['timestamp','data','periodo','cliente','num_pedido','metros','preco_m','total','maquina','status','descricao','obs'],[nowStr(),d.data,'importado',d.cliente,'',d.met,d.vm,d.val,d.imp,'Concluido',d.arquivo,d.obs]);
     ok++;await new Promise(function(r){setTimeout(r,80);});
   }
+
+  setProgress('Concluido! '+ok+' pedido(s) importado(s).',100);
   var msg='<div class="alert alert-g" style="margin-top:10px"><i class="ti ti-circle-check"></i><strong>'+ok+' pedido(s) importado(s)!</strong>';
   if(duplic>0)msg+='<br><span style="font-size:12px;opacity:.8">'+duplic+' duplicata(s) ignorada(s) automaticamente.</span>';
   msg+='</div>';
-  toast(ok+' pedidos lancados!');$('imp-preview').innerHTML=msg;delete _cache['pedidos'];
+  toast(ok+' pedidos lancados!');
+  var preview=document.getElementById('imp-preview');
+  if(preview)preview.insertAdjacentHTML('beforeend',msg);
+  delete _cache['pedidos'];
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-rocket"></i> Lancar pedidos selecionados';}
 }
 
 var _insItens=[];
