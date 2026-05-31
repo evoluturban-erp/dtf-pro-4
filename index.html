@@ -877,21 +877,179 @@ async function confirmarImp(){
   toast(ok+' pedidos lancados!');$('imp-preview').innerHTML='<div class="alert alert-g" style="margin-top:10px"><i class="ti ti-circle-check"></i><strong>'+ok+' pedidos importados!</strong></div>';
 }
 
+var _insItens=[];
+
 async function renderInsumos(){
-  var rows=await apiGet('insumos');var matOpts=['Filme DTF 60cm','Tinta White','Tinta Yellow','Tinta Magenta','Tinta Cyan','Tinta Black','TPU (po)','Poliamida','Outro'].map(function(o){return '<option>'+o+'</option>';}).join('');
-  var ultR='';rows.slice(1).reverse().slice(0,8).forEach(function(r){ultR+='<tr><td>'+fmtData(r[1])+'</td><td>'+(r[4]||'')+'</td><td>'+fmt(r[6])+' '+(r[5]||'')+'</td><td><strong>'+fmtR(r[8])+'</strong></td></tr>';});
-  if(!ultR)ultR='<tr><td colspan="4" style="text-align:center;color:var(--text3)">Nenhuma entrada.</td></tr>';
-  $('main-content').innerHTML='<div class="g2"><div class="card"><div class="card-title"><i class="ti ti-truck"></i>registrar entrada</div>'
+  var rows=await apiGet('insumos');
+  var matOpts=['Filme DTF 60cm','Tinta White','Tinta Yellow','Tinta Magenta','Tinta Cyan','Tinta Black','TPU (po)','Poliamida','Outro'].map(function(o){return '<option>'+o+'</option>';}).join('');
+
+  // Tabela de ultimas entradas com Editar e Remover
+  var allRows=rows.slice(1).reverse();
+  var ultR='';
+  allRows.slice(0,20).forEach(function(r,i){
+    var realIdx=rows.length-1-i; // indice real na planilha (1-based nao precisa, usamos timestamp)
+    var ts=r[0]||'';
+    ultR+='<tr>'
+      +'<td>'+fmtData(r[1])+'</td>'
+      +'<td style="font-size:11px;color:var(--text2)">'+(r[2]||'-')+'</td>'
+      +'<td>'+(r[3]||'')+'</td>'
+      +'<td>'+(r[4]||'')+'</td>'
+      +'<td>'+fmt(r[6])+' '+(r[5]||'')+'</td>'
+      +'<td>'+fmtR(parseFloat(r[7])||0)+'</td>'
+      +'<td><strong>'+fmtR(parseFloat(r[8])||0)+'</strong></td>'
+      +'<td style="white-space:nowrap">'
+      +'<button class="btn btn-xs" onclick="editarInsumo(\''+ts.replace(/'/g,"\\'")+'\')" title="Editar"><i class="ti ti-pencil"></i></button> '
+      +'<button class="btn btn-xs btn-r" onclick="removerInsumo(\''+ts.replace(/'/g,"\\'")+'\')" title="Remover"><i class="ti ti-trash"></i></button>'
+      +'</td>'
+      +'</tr>';
+  });
+  if(!ultR)ultR='<tr><td colspan="8" style="text-align:center;color:var(--text3)">Nenhuma entrada.</td></tr>';
+
+  $('main-content').innerHTML=''
+    // === FORMULARIO ===
+    +'<div class="card"><div class="card-title"><i class="ti ti-truck"></i>registrar entrada de insumos</div>'
     +'<div class="g2"><div class="f"><label>Data</label><input type="date" id="ins-data" value="'+today()+'"></div><div class="f"><label>Nr NF</label><input id="ins-nf" placeholder="NF-001234"></div></div>'
     +'<div class="f"><label>Fornecedor</label><input id="ins-forn" placeholder="Nome do fornecedor"></div>'
-    +'<div class="g2"><div class="f"><label>Material</label><select id="ins-mat">'+matOpts+'</select></div><div class="f"><label>Unidade</label><select id="ins-unid"><option>metros</option><option>kg</option><option>litros</option><option>unidade</option></select></div></div>'
-    +'<div class="g3"><div class="f"><label>Quantidade</label><input type="number" id="ins-qtd" placeholder="0" oninput="calcIns()"></div><div class="f"><label>Preco unit. (R$)</label><input type="number" id="ins-preco" placeholder="0.00" oninput="calcIns()"></div><div class="f"><label>Subtotal</label><input type="number" id="ins-sub" readonly style="background:var(--surface2);font-weight:600"></div></div>'
-    +'<button class="btn btn-p btn-full" onclick="salvarInsumo()"><i class="ti ti-device-floppy"></i> Registrar entrada</button></div>'
-    +'<div class="card"><div class="card-title"><i class="ti ti-history"></i>ultimas entradas</div><div style="overflow-x:auto"><table class="tbl" style="font-size:12px"><thead><tr><th>Data</th><th>Material</th><th>Qtd</th><th>Subtotal</th></tr></thead><tbody>'+ultR+'</tbody></table></div></div></div>';
+    // Linha de item
+    +'<div style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:8px">'
+    +'<p style="font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px"><i class="ti ti-plus"></i> Adicionar item</p>'
+    +'<div class="g2" style="margin-bottom:8px"><div class="f" style="margin-bottom:0"><label>Material</label><select id="ins-mat">'+matOpts+'</select></div><div class="f" style="margin-bottom:0"><label>Unidade</label><select id="ins-unid"><option>metros</option><option>kg</option><option>litros</option><option>unidade</option></select></div></div>'
+    +'<div class="g3" style="margin-bottom:8px"><div class="f" style="margin-bottom:0"><label>Quantidade</label><input type="number" id="ins-qtd" placeholder="0" oninput="calcIns()"></div><div class="f" style="margin-bottom:0"><label>Preco unit. (R$)</label><input type="number" id="ins-preco" placeholder="0.00" step="0.01" oninput="calcIns()"></div><div class="f" style="margin-bottom:0"><label>Subtotal</label><input type="number" id="ins-sub" readonly style="background:var(--border);font-weight:600"></div></div>'
+    +'<button class="btn btn-b btn-sm" onclick="adicionarItemIns()"><i class="ti ti-plus"></i> Adicionar item a nota</button>'
+    +'</div>'
+    // Lista de itens da NF atual
+    +'<div id="ins-lista-itens" style="margin-bottom:10px"></div>'
+    +'<button class="btn btn-p btn-full" id="btn-reg-ins" onclick="salvarInsumos()"><i class="ti ti-device-floppy"></i> Registrar nota fiscal</button>'
+    +'</div>'
+    // === ULTIMAS ENTRADAS ===
+    +'<div class="card"><div class="card-title"><i class="ti ti-history"></i>ultimas entradas</div>'
+    +'<div style="overflow-x:auto"><table class="tbl" style="font-size:12px">'
+    +'<thead><tr><th>Data</th><th>NF</th><th>Fornecedor</th><th>Material</th><th>Qtd</th><th>Preco unit.</th><th>Subtotal</th><th>Acoes</th></tr></thead>'
+    +'<tbody>'+ultR+'</tbody></table></div></div>';
+
+  _insItens=[];
+  renderListaItensIns();
 }
 
-function calcIns(){var q=parseFloat(v('ins-qtd'))||0,p=parseFloat(v('ins-preco'))||0;var el=$('ins-sub');if(el)el.value=(q*p).toFixed(2);}
-async function salvarInsumo(){if(!v('ins-forn').trim()){toast('Informe o fornecedor');return;}if(!(parseFloat(v('ins-qtd'))||0)){toast('Informe a quantidade');return;}var sub=(parseFloat(v('ins-qtd'))||0)*(parseFloat(v('ins-preco'))||0);await apiPost('insumos',['timestamp','data','nf','fornecedor','material','unidade','quantidade','preco_unit','subtotal','obs'],[nowStr(),v('ins-data'),v('ins-nf'),v('ins-forn'),v('ins-mat'),v('ins-unid'),v('ins-qtd'),v('ins-preco'),sub.toFixed(2),'']);toast('Entrada registrada!');delete _cache['insumos'];renderInsumos();}
+function calcIns(){
+  var q=parseFloat(v('ins-qtd'))||0,p=parseFloat(v('ins-preco'))||0;
+  var el=$('ins-sub');if(el)el.value=(q*p).toFixed(2);
+}
+
+function adicionarItemIns(){
+  var mat=v('ins-mat'),unid=v('ins-unid'),qtd=parseFloat(v('ins-qtd'))||0,preco=parseFloat(v('ins-preco'))||0;
+  if(!mat){toast('Selecione o material');return;}
+  if(!qtd){toast('Informe a quantidade');return;}
+  var sub=Math.round(qtd*preco*100)/100;
+  _insItens.push({mat:mat,unid:unid,qtd:qtd,preco:preco,sub:sub});
+  // Limpa campos do item
+  var qtdEl=$('ins-qtd'),precoEl=$('ins-preco'),subEl=$('ins-sub');
+  if(qtdEl)qtdEl.value='';if(precoEl)precoEl.value='';if(subEl)subEl.value='';
+  renderListaItensIns();
+  toast('Item adicionado!');
+}
+
+function renderListaItensIns(){
+  var el=$('ins-lista-itens');if(!el)return;
+  if(!_insItens.length){el.innerHTML='<p style="font-size:12px;color:var(--text3);text-align:center;padding:8px">Nenhum item adicionado ainda.</p>';return;}
+  var totSub=_insItens.reduce(function(s,it){return s+it.sub;},0);
+  var rows=_insItens.map(function(it,i){
+    return '<tr>'
+      +'<td>'+it.mat+'</td>'
+      +'<td>'+fmt(it.qtd)+' '+it.unid+'</td>'
+      +'<td>'+fmtR(it.preco)+'/'+it.unid+'</td>'
+      +'<td><strong>'+fmtR(it.sub)+'</strong></td>'
+      +'<td style="white-space:nowrap">'
+      +'<button class="btn btn-xs btn-r" onclick="remItemIns('+i+')" title="Remover"><i class="ti ti-trash"></i></button>'
+      +'</td>'
+      +'</tr>';
+  }).join('');
+  el.innerHTML='<div style="background:var(--surface2);border-radius:var(--radius);overflow:hidden;margin-bottom:6px">'
+    +'<table class="tbl" style="font-size:12px">'
+    +'<thead><tr><th>Material</th><th>Qtd</th><th>Preco unit.</th><th>Subtotal</th><th></th></tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'</table>'
+    +'<div style="padding:8px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;font-weight:600">'
+    +'<span>Total NF ('+_insItens.length+' item(ns)):</span><span style="color:var(--green)">'+fmtR(totSub)+'</span>'
+    +'</div></div>';
+}
+
+function remItemIns(i){_insItens.splice(i,1);renderListaItensIns();}
+
+async function salvarInsumos(){
+  var data=v('ins-data'),nf=v('ins-nf').trim(),forn=v('ins-forn').trim();
+  if(!forn){toast('Informe o fornecedor');return;}
+  if(!_insItens.length){toast('Adicione ao menos um item antes de registrar');return;}
+  var btn=$('btn-reg-ins');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Salvando...';}
+  try{
+    for(var i=0;i<_insItens.length;i++){
+      var it=_insItens[i];
+      await apiPost('insumos',['timestamp','data','nf','fornecedor','material','unidade','quantidade','preco_unit','subtotal','obs'],
+        [nowStr(),data,nf,forn,it.mat,it.unid,it.qtd,it.preco,it.sub.toFixed(2),'']);
+      await new Promise(function(r){setTimeout(r,60);});
+    }
+    toast(_insItens.length+' item(ns) registrado(s)!');
+    delete _cache['insumos'];
+    renderInsumos();
+  }catch(e){toast('Erro ao salvar: '+e.message);if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-device-floppy"></i> Registrar nota fiscal';}}
+}
+
+async function editarInsumo(ts){
+  var rows=await apiGet('insumos');
+  var row=rows.slice(1).find(function(r){return String(r[0]||'')==String(ts);});
+  if(!row){toast('Item nao encontrado');return;}
+  var matOpts=['Filme DTF 60cm','Tinta White','Tinta Yellow','Tinta Magenta','Tinta Cyan','Tinta Black','TPU (po)','Poliamida','Outro'].map(function(o){return '<option'+(row[4]===o?' selected':'')+'>'+o+'</option>';}).join('');
+  var unidOpts=['metros','kg','litros','unidade'].map(function(o){return '<option'+(row[5]===o?' selected':'')+'>'+o+'</option>';}).join('');
+  var m=document.createElement('div');m.className='modal-bg';
+  m.innerHTML='<div class="modal" style="max-width:480px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
+    +'<p style="font-size:16px;font-weight:600"><i class="ti ti-pencil"></i> Editar insumo</p>'
+    +'<button onclick="this.closest(\'.modal-bg\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--text2)">x</button></div>'
+    +'<div class="g2"><div class="f"><label>Data</label><input type="date" id="ei-data" value="'+(row[1]||today())+'"></div><div class="f"><label>Nr NF</label><input id="ei-nf" value="'+(row[2]||'')+'"></div></div>'
+    +'<div class="f"><label>Fornecedor</label><input id="ei-forn" value="'+(row[3]||'')+'"></div>'
+    +'<div class="g2"><div class="f"><label>Material</label><select id="ei-mat">'+matOpts+'</select></div><div class="f"><label>Unidade</label><select id="ei-unid">'+unidOpts+'</select></div></div>'
+    +'<div class="g3"><div class="f"><label>Quantidade</label><input type="number" id="ei-qtd" value="'+(row[6]||0)+'" oninput="calcEi()"></div><div class="f"><label>Preco unit. (R$)</label><input type="number" id="ei-preco" value="'+(row[7]||0)+'" step="0.01" oninput="calcEi()"></div><div class="f"><label>Subtotal</label><input type="number" id="ei-sub" readonly value="'+(row[8]||0)+'" style="background:var(--surface2);font-weight:600"></div></div>'
+    +'<div style="display:flex;gap:8px;margin-top:4px">'
+    +'<button class="btn btn-p" style="flex:1;justify-content:center" onclick="salvarEdicaoIns(\''+ts.replace(/'/g,"\\'")+'\')" ><i class="ti ti-device-floppy"></i> Salvar</button>'
+    +'<button class="btn" onclick="this.closest(\'.modal-bg\').remove()">Cancelar</button>'
+    +'</div></div>';
+  m.addEventListener('click',function(e){if(e.target===m)m.remove();});
+  document.body.appendChild(m);
+}
+
+function calcEi(){var q=parseFloat(v('ei-qtd'))||0,p=parseFloat(v('ei-preco'))||0;var el=$('ei-sub');if(el)el.value=(q*p).toFixed(2);}
+
+async function salvarEdicaoIns(ts){
+  var forn=v('ei-forn').trim();if(!forn){toast('Informe o fornecedor');return;}
+  var qtd=parseFloat(v('ei-qtd'))||0;if(!qtd){toast('Informe a quantidade');return;}
+  var sub=(qtd*(parseFloat(v('ei-preco'))||0)).toFixed(2);
+  // Atualiza na planilha via upsert pelo timestamp
+  try{
+    await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      acao:'upsert',aba:'insumos',key:API_KEY,id_col:0,id_val:ts,
+      headers:['timestamp','data','nf','fornecedor','material','unidade','quantidade','preco_unit','subtotal','obs'],
+      row:[ts,v('ei-data'),v('ei-nf'),forn,v('ei-mat'),v('ei-unid'),qtd,v('ei-preco'),sub,'']
+    })});
+  }catch(e){}
+  delete _cache['insumos'];
+  var mb=document.querySelector('.modal-bg');if(mb)mb.remove();
+  toast('Insumo atualizado!');
+  renderInsumos();
+}
+
+async function removerInsumo(ts){
+  if(!confirm('Remover este item de insumo?'))return;
+  try{
+    await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      acao:'upsert',aba:'insumos',key:API_KEY,id_col:0,id_val:ts,
+      headers:['timestamp','data','nf','fornecedor','material','unidade','quantidade','preco_unit','subtotal','obs'],
+      row:[ts,'','','REMOVIDO','','',0,0,0,'DELETADO']
+    })});
+  }catch(e){}
+  delete _cache['insumos'];
+  toast('Item removido!');
+  renderInsumos();
+}
 function renderRelatorios(){$('main-content').innerHTML='<div class="g2"><div style="margin-bottom:12px"><div class="card" style="cursor:pointer;margin-bottom:0" onclick="gerarRelProd()"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-printer" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Producao</p></div><p style="font-size:12px;color:var(--text2)">Metragem, perdas e aproveitamento por impressora</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b"><i class="ti ti-eye"></i> Ver</button></div></div><div class="card" style="cursor:pointer" onclick="gerarRelCli()"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-users" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Por cliente</p></div><p style="font-size:12px;color:var(--text2)">Faturamento, ticket medio e ranking</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b"><i class="ti ti-eye"></i> Ver</button></div></div></div><div><div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-currency-dollar" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Financeiro</p></div><p style="font-size:12px;color:var(--text2)">A receber, pagar e saldo do periodo</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b" onclick="gerarRelFin()"><i class="ti ti-eye"></i> Ver</button><button class="btn btn-sm" onclick="exportCSV(\'financeiro\')"><i class="ti ti-download"></i> CSV</button></div></div><div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-package" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Insumos</p></div><p style="font-size:12px;color:var(--text2)">Compras e gastos com materiais</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b" onclick="gerarRelIns()"><i class="ti ti-eye"></i> Ver</button><button class="btn btn-sm" onclick="exportCSV(\'insumos\')"><i class="ti ti-download"></i> CSV</button></div></div></div></div><div id="rel-output"></div>';}
 
 async function gerarRelProd(){var rows=await apiGet('producao');var pd=rows.slice(1);function sc(c){return pd.reduce(function(s,r){return s+(parseFloat(r[c])||0);},0);}var tot=sc(5),perd=sc(13),aprov=(tot+perd)>0?(tot/(tot+perd)*100).toFixed(1):0;var trows='';pd.forEach(function(r){var imp=(r[1]||'').toString().includes('AZUL')||r[1]==='1'?'<span class="badge b-b">Imp.1</span>':'<span class="badge b-g">Imp.2</span>';trows+='<tr><td>'+fmtData(r[2])+'</td><td>'+imp+'</td><td>'+(r[4]||'')+'</td><td><strong>'+fmt(r[5])+'m</strong></td><td>'+fmt(r[13]||0)+'m</td><td>'+fmt(r[6]||0,0)+'g</td><td>'+fmt(r[7]||0,0)+'g</td><td>'+fmt(r[8]||0,0)+'g</td><td>'+fmt(r[9]||0,0)+'g</td><td>'+fmt(r[10]||0,0)+'g</td><td>'+fmt(r[14]||0,1)+'</td></tr>';});if(!trows)trows='<tr><td colspan="11" style="text-align:center;color:var(--text3)">Nenhum dado.</td></tr>';$('rel-output').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><p style="font-weight:600;font-size:15px">Relatorio de Producao</p><button class="btn btn-sm" onclick="window.print()"><i class="ti ti-printer"></i> Imprimir</button></div><div class="g4" style="margin-bottom:12px"><div class="kpi"><div class="kpi-l">Total produzido</div><div class="kpi-v">'+fmt(tot)+'m</div></div><div class="kpi"><div class="kpi-l">Perdas</div><div class="kpi-v">'+fmt(perd)+'m</div></div><div class="kpi"><div class="kpi-l">Aproveitamento</div><div class="kpi-v">'+aprov+'%</div></div><div class="kpi"><div class="kpi-l">Energia total</div><div class="kpi-v">'+fmt(sc(14),1)+' kWh</div></div></div><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>Imp.</th><th>Operador</th><th>Metros</th><th>Perdas</th><th>White</th><th>Yellow</th><th>Magenta</th><th>Cyan</th><th>Black</th><th>kWh</th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';}
