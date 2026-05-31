@@ -708,10 +708,9 @@ async function finTab(t,btn){
       var venc=String(r[4]||'').replace(/'/g,"\'");
       var acoes='';
       if(!pg){
-        var obs=String(r[10]||'').replace(/"/g,'&quot;');
         acoes+='<button class="btn btn-xs btn-p" onclick="darBaixa(&quot;'+ts+'&quot;)" title="Dar baixa">Baixa</button> ';
-        acoes+='<button class="btn btn-xs btn-b" onclick="imprimirCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;,&quot;'+obs+'&quot;)" title="Imprimir"><i class="ti ti-printer"></i></button> ';
-        acoes+='<button class="btn btn-xs" style="background:#25D366;color:#fff;border-color:#25D366" onclick="whatsappCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;,&quot;'+obs+'&quot;)" title="WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>';
+        acoes+='<button class="btn btn-xs btn-b" onclick="imprimirCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;)" title="Imprimir"><i class="ti ti-printer"></i></button> ';
+        acoes+='<button class="btn btn-xs" style="background:#25D366;color:#fff;border-color:#25D366" onclick="whatsappCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;)" title="WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>';
       }
       rows+='<tr><td>'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[6]||'')+'</td><td><strong>'+fmtR(r[5])+'</strong></td><td'+(at?' style="color:var(--red);font-weight:500"':'')+'>'+fmtData(r[4])+'</td><td><span class="badge '+(pg?'b-g':at?'b-r':'b-a')+'">'+(pg?'pago':at?'vencido':'pendente')+'</span></td><td style="white-space:nowrap">'+acoes+'</td></tr>';
     });
@@ -738,32 +737,21 @@ async function finTab(t,btn){
   }
 }
 
-async function _buscarJobsCliente(cli,ref,obs){
+async function _buscarJobsCliente(cli,ref){
+  // Extrai periodo da referencia ex: "Fechamento 31/05/2026" ou "Fechamento 01/05/2026 a 31/05/2026"
   var pedRows=await apiGet('pedidos');
-  var jobs=[];
-  // Se tem timestamps salvos na obs, usa eles
-  if(obs&&obs.indexOf('jobs:')===0){
-    var tsLista=obs.replace('jobs:','').split(',').filter(Boolean);
-    if(tsLista.length){
-      jobs=pedRows.slice(1).filter(function(r){
-        return tsLista.indexOf(String(r[0]||''))>-1;
-      });
-    }
-  }
-  // Fallback: busca por cliente se nao tem timestamps
-  if(!jobs.length){
-    jobs=pedRows.slice(1).filter(function(r){
-      return String(r[3]||'').trim().toLowerCase()===cli.trim().toLowerCase()
-        && String(r[9]||'')!=='DELETADO';
-    });
-  }
+  var jobs=pedRows.slice(1).filter(function(r){
+    return String(r[3]||'').trim().toLowerCase()===cli.trim().toLowerCase()
+      && String(r[9]||'')!=='DELETADO';
+  });
+  // Ordena por data
   jobs.sort(function(a,b){return String(a[1]).localeCompare(String(b[1]));});
   return jobs;
 }
 
-async function imprimirCobranca(cli,ref,val,venc,obs){
+async function imprimirCobranca(cli,ref,val,venc){
   toast('Buscando jobs...');
-  var jobs=await _buscarJobsCliente(cli,ref,obs);
+  var jobs=await _buscarJobsCliente(cli,ref);
   var porDia={};
   jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
   var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
@@ -797,9 +785,9 @@ async function imprimirCobranca(cli,ref,val,venc,obs){
   var w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(function(){w.print();},500);
 }
 
-async function whatsappCobranca(cli,ref,val,venc,obs){
+async function whatsappCobranca(cli,ref,val,venc){
   toast('Buscando jobs...');
-  var jobs=await _buscarJobsCliente(cli,ref,obs);
+  var jobs=await _buscarJobsCliente(cli,ref);
   var porDia={};jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
   var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
   var cls=await getClientes();
@@ -913,7 +901,6 @@ async function salvarConta(){var cli=v('nc-cli').trim(),val=parseFloat(v('nc-val
 function calcVencimento(ciclo,dataRef){var d=new Date(dataRef||today());if(ciclo==='semanal'){var df=(5-d.getDay()+7)%7||7;d.setDate(d.getDate()+df);}else if(ciclo==='quinzenal'){d.setDate(d.getDate()<=15?15:new Date(d.getFullYear(),d.getMonth()+1,0).getDate());}else if(ciclo==='mensal'){d.setDate(new Date(d.getFullYear(),d.getMonth()+1,0).getDate());}else{d.setDate(d.getDate()+7);}return d.toISOString().split('T')[0];}
 
 var _jobsFech=[];
-var _jobsFechAtual={};
 async function carregarJobsCliente(){
   var cliNome=v('fech-cli'),de=v('fech-de'),ate=v('fech-ate'),el=$('fech-jobs-panel');
   if(!el)return;if(!cliNome){el.innerHTML='';return;}
@@ -983,8 +970,6 @@ async function confirmarFechamento(){
     +'<button class="btn btn-b" onclick="salvarHTMLFech(\''+cliSafe+'\')" style="justify-content:center"><i class="ti ti-file-type-pdf"></i> Salvar PDF</button>'
     +'<button class="btn" onclick="enviarWAFech(\''+cliSafe+'\','+totM+','+totV+',\''+venc+'\',\''+ctChave+'\','+saldoDev+')" style="justify-content:center;background:#25D366;color:#fff;border-color:#25D366"><i class="ti ti-brand-whatsapp"></i> WhatsApp</button></div>'
     +'<button class="btn btn-p btn-full" style="margin-top:8px" id="btn-lancar-fin" onclick="lancarCtaReceber(\''+cliSafe+'\','+totV+',\''+venc+'\',\''+ctDesc+'\','+saldoDev+','+(isAtualizacao?'\''+tsSafe+'\'':'null')+')"><i class="ti ti-currency-dollar"></i> '+(isAtualizacao?'Atualizar no financeiro':'Lancar no financeiro')+'</button>';
-// Armazena jobs do fechamento atual para uso posterior
-_jobsFechAtual={cli:cliNome,jobs:sel};
 }
 
 function salvarHTMLFech(nome){var el=$('doc-fechamento');if(!el){toast('Gere o fechamento primeiro');return;}var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cobranca '+nome+'</title><style>body{font-family:Arial,sans-serif;font-size:13px;padding:2rem;max-width:600px;margin:0 auto}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px solid #eee}</style></head><body>'+el.innerHTML+'</body></html>';var b=new Blob([html],{type:'text/html'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='cobranca_'+nome.replace(/ /g,'_')+'_'+today()+'.html';a.click();toast('Arquivo salvo! Abra no navegador e imprima como PDF');}
@@ -992,76 +977,57 @@ function salvarHTMLFech(nome){var el=$('doc-fechamento');if(!el){toast('Gere o f
 function enviarWAFech(nome,totM,totV,venc,chavePix,saldoDev){
   var sel=_jobsFech.filter(function(r){return r._sel;});
   var porDia={};sel.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
-  var totSvc=sel.reduce(function(s,r){return s+(parseFloat(r[7])||0);},0);
-  var NL='%0A';
   var de=v('fech-de'),ate=v('fech-ate')||today();
   var periodo=(de?fmtData(de)+' a ':'')+fmtData(ate);
-
-  // Detecta ciclo do cliente para titulo
-  var cicloTitulo='Fechamento Personalizado';
   getClientes().then(function(cls){
     var cli=cls.find(function(c){return c.nome===nome;});
     var ciclo=cli&&cli.ciclo?cli.ciclo.toLowerCase():'';
-    if(ciclo==='semanal')cicloTitulo='Fechamento Semanal';
-    else if(ciclo==='quinzenal')cicloTitulo='Fechamento Quinzenal';
-    else if(ciclo==='mensal')cicloTitulo='Fechamento Mensal';
-
-    var p=[];
-    // Cabecalho
-    p.push('%E2%95%94%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%97');
-    p.push('   %F0%9F%8E%AF DTF Pro');
-    p.push('   '+encodeURIComponent(cicloTitulo));
-    p.push('%E2%95%9A%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%90%E2%95%9D');
-    p.push('');
-    p.push('%F0%9F%91%A4 Cliente: '+encodeURIComponent(nome));
-    p.push('%F0%9F%93%85 Per%C3%ADodo: '+encodeURIComponent(periodo));
-    if(saldoDev>0){p.push('');p.push('%E2%9A%A0%EF%B8%8F Saldo anterior: '+encodeURIComponent(fmtR(saldoDev)));}
-    p.push('');
-    p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
-    p.push('%F0%9F%93%8C Servi%C3%A7os:');
-    Object.keys(porDia).sort().forEach(function(dia){
-      p.push('');
-      p.push('%F0%9F%93%85 '+encodeURIComponent(fmtData(dia)));
-      porDia[dia].forEach(function(r){
-        p.push('%E2%80%A2 '+encodeURIComponent((r[10]||r[3]||'-')+' | '+fmt(r[5])+'m | '+fmtR(r[7])));
-      });
-    });
-    p.push('');
-    p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
-    p.push('%F0%9F%93%8F Metragem total: '+encodeURIComponent(fmt(totM)+'m'));
-    if(saldoDev>0)p.push('%F0%9F%92%B5 *TOTAL (c/ saldo): '+encodeURIComponent(fmtR(totV))+'*');
-    else p.push('%F0%9F%92%B5 *TOTAL: '+encodeURIComponent(fmtR(totV))+'*');
-    if(chavePix)p.push('%F0%9F%8F%A6 Pix: '+encodeURIComponent(chavePix));
-    p.push('');
-    p.push('%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC%E2%96%AC');
-    p.push('%F0%9F%93%8B Por favor, confira os itens acima.');
-    p.push('Em caso de d%C3%BAvidas, estamos %C3%A0 disposi%C3%A7%C3%A3o! %F0%9F%98%8A');
-    p.push('%F0%9F%96%A8%EF%B8%8F EvolutUrban DTF Pro');
-
-    var msg=p.join(NL);
+    var cicloTitulo=ciclo==='semanal'?'Fechamento Semanal':ciclo==='quinzenal'?'Fechamento Quinzenal':ciclo==='mensal'?'Fechamento Mensal':'Fechamento Personalizado';
     var tel=cli&&cli.tel?cli.tel.replace(/[^0-9]/g,''):'';
+    var L=[];
+    L.push('*DTF Pro - '+cicloTitulo+'*');
+    L.push('--------------------');
+    L.push('Cliente: '+nome);
+    L.push('Periodo: '+periodo);
+    if(saldoDev>0){L.push('');L.push('Saldo anterior: '+fmtR(saldoDev));}
+    L.push('');
+    L.push('*Servicos:*');
+    Object.keys(porDia).sort().forEach(function(dia){
+      L.push('');
+      L.push('*'+fmtData(dia)+'*');
+      porDia[dia].forEach(function(r){L.push('- '+(r[10]||r[3]||'-')+' | '+fmt(r[5])+'m | '+fmtR(r[7]));});
+    });
+    L.push('');
+    L.push('--------------------');
+    L.push('Metragem total: '+fmt(totM)+'m');
+    if(saldoDev>0)L.push('*TOTAL (c/ saldo): '+fmtR(totV)+'*');
+    else L.push('*TOTAL: '+fmtR(totV)+'*');
+    if(chavePix)L.push('Pix: '+chavePix);
+    L.push('');
+    L.push('Por favor, confira os itens acima.');
+    L.push('Em caso de duvidas, estamos a disposicao!');
+    L.push('EvolutUrban DTF Pro');
+    var msg=encodeURIComponent(L.join('\n'));
     var url=tel?'https://wa.me/55'+tel+'?text='+msg:'https://wa.me/?text='+msg;
     window.open(url,'_blank');
   });
 }
 
+
 async function lancarCtaReceber(nome,valor,venc,ctDesc,saldoDev,tsExistente){
   var btn=$('btn-lancar-fin');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Salvando...';}
   var ref='Fechamento '+new Date().toLocaleDateString('pt-BR')+(saldoDev>0?' (incl. saldo '+fmtR(saldoDev)+')':'');
-  // Salva timestamps dos jobs para recuperar depois
-  var jobsAtual=_jobsFechAtual&&_jobsFechAtual.cli===nome?_jobsFechAtual.jobs:[];
-  var jobsTs=jobsAtual.map(function(j){return j[0]||'';}).filter(Boolean).join(',');
-  var obsVal='jobs:'+jobsTs;
   try{
     if(tsExistente){
+      // Atualiza cobranca existente via upsert
       await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({
         acao:'upsert',aba:'financeiro',key:API_KEY,id_col:0,id_val:tsExistente,
         headers:['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],
-        row:[tsExistente,today(),'receber',nome,venc,valor,ref,ctDesc||'Pix','pendente',obsVal]
+        row:[tsExistente,today(),'receber',nome,venc,valor,ref,ctDesc||'Pix','pendente','fechamento atualizado em '+new Date().toLocaleString('pt-BR')]
       })});
       toast('Cobranca atualizada no financeiro!');
     }else{
-      await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),today(),'receber',nome,venc,valor,ref,ctDesc||'Pix','pendente',obsVal]);
+      await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),today(),'receber',nome,venc,valor,ref,ctDesc||'Pix','pendente','gerado no fechamento']);
       toast('Cobranca lancada no financeiro!');
     }
     var cls=await getClientes();var idx=cls.findIndex(function(c){return c.nome===nome;});
