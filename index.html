@@ -699,7 +699,21 @@ async function finTab(t,btn){
   var dados=_finDados||[],hoje=today(),p=$('fin-panel');if(!p)return;
   if(t==='rec'||t==='pag'){
     var tipo=t==='rec'?'receber':'pagar',fil=dados.filter(function(r){return r[2]===tipo;});
-    var rows='';fil.slice(0,40).forEach(function(r){var pg=r[8]==='pago'||r[8]==='recebido';var at=!pg&&r[4]&&r[4]<hoje;rows+='<tr><td>'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[6]||'')+'</td><td><strong>'+fmtR(r[5])+'</strong></td><td'+(at?' style="color:var(--red);font-weight:500"':'')+'>'+fmtData(r[4])+'</td><td><span class="badge '+(pg?'b-g':at?'b-r':'b-a')+'">'+(pg?'pago':at?'vencido':'pendente')+'</span></td><td>'+(!pg?'<button class="btn btn-xs btn-p" onclick="darBaixa(\''+r[0]+'\')">Baixa</button>':'')+'</td></tr>';});
+    var rows='';fil.slice(0,40).forEach(function(r){
+      var pg=r[8]==='pago'||r[8]==='recebido';var at=!pg&&r[4]&&r[4]<hoje;
+      var ts=String(r[0]||'').replace(/'/g,"\'");
+      var cli=String(r[3]||'').replace(/'/g,"\'");
+      var ref=String(r[6]||'').replace(/'/g,"\'");
+      var val=parseFloat(r[5])||0;
+      var venc=String(r[4]||'').replace(/'/g,"\'");
+      var acoes='';
+      if(!pg){
+        acoes+='<button class="btn btn-xs btn-p" onclick="darBaixa(''+ts+'')" title="Dar baixa">Baixa</button> ';
+        acoes+='<button class="btn btn-xs btn-b" onclick="imprimirCobranca(''+cli+'',''+ref+'','+val+',''+venc+'')" title="Imprimir"><i class="ti ti-printer"></i></button> ';
+        acoes+='<button class="btn btn-xs" style="background:#25D366;color:#fff;border-color:#25D366" onclick="whatsappCobranca(''+cli+'',''+ref+'','+val+',''+venc+'')" title="WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>';
+      }
+      rows+='<tr><td>'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[6]||'')+'</td><td><strong>'+fmtR(r[5])+'</strong></td><td'+(at?' style="color:var(--red);font-weight:500"':'')+'>'+fmtData(r[4])+'</td><td><span class="badge '+(pg?'b-g':at?'b-r':'b-a')+'">'+(pg?'pago':at?'vencido':'pendente')+'</span></td><td style="white-space:nowrap">'+acoes+'</td></tr>';
+    });
     if(!rows)rows='<tr><td colspan="7" style="text-align:center;color:var(--text3)">Nenhum registro.</td></tr>';
     p.innerHTML='<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>Cliente/Forn.</th><th>Referencia</th><th>Valor</th><th>Vencimento</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   }else if(t==='fechamento'){
@@ -721,6 +735,35 @@ async function finTab(t,btn){
       +'<div class="f"><label>Referencia</label><input id="nc-ref" placeholder="Ex: Fechamento semanal, OS-042..."></div>'
       +'<button class="btn btn-p btn-full" style="margin-top:4px" onclick="salvarConta()"><i class="ti ti-device-floppy"></i> Salvar conta</button></div>';
   }
+}
+
+function imprimirCobranca(cli,ref,val,venc){
+  var css='body{font-family:Arial,sans-serif;font-size:13px;padding:2rem;max-width:620px;margin:0 auto}table{width:100%;border-collapse:collapse}td{padding:5px 0;border-bottom:1px solid #eee}p{margin:0}';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Cobranca '+cli+'</title><style>'+css+'</style></head><body>'
+    +'<div style="display:flex;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #e5e7eb">'
+    +'<div><p style="font-size:20px;font-weight:700">DTF Pro</p><p style="font-size:12px;color:#6b7280">Documento de Cobranca</p></div>'
+    +'<div style="text-align:right"><p style="font-size:12px;color:#6b7280">Emitido em '+new Date().toLocaleDateString('pt-BR')+'</p>'
+    +'<p style="font-size:12px;color:#6b7280">Vencimento: <strong>'+fmtData(venc)+'</strong></p></div></div>'
+    +'<div style="background:#f9fafb;border-radius:6px;padding:10px 14px;margin-bottom:14px">'
+    +'<p style="font-size:11px;color:#9ca3af;text-transform:uppercase;margin:0 0 2px">Cliente</p>'
+    +'<p style="font-size:15px;font-weight:600;margin:0">'+cli+'</p>'
+    +'<p style="font-size:12px;color:#6b7280;margin:0">Ref: '+ref+'</p></div>'
+    +'<div style="border-top:2px solid #e5e7eb;padding-top:12px;display:flex;justify-content:space-between;font-size:18px;font-weight:700;color:#16a34a">'
+    +'<span>TOTAL:</span><span>'+fmtR(val)+'</span></div>'
+    +'</body></html>';
+  var w=window.open('','_blank');w.document.write(html);w.document.close();w.print();
+}
+
+function whatsappCobranca(cli,ref,val,venc){
+  var NL='%0A';
+  var p=['*Cobranca DTF Pro*','%F0%9F%91%A4 Cliente: '+encodeURIComponent(cli),'Ref: '+encodeURIComponent(ref),'','*%F0%9F%92%B5 TOTAL: '+encodeURIComponent(fmtR(val))+'*','%F0%9F%93%85 Vencimento: '+encodeURIComponent(fmtData(venc)),'','%F0%9F%93%8B Por favor, confira os itens acima.','Em caso de d%C3%BAvidas, estamos %C3%A0 disposi%C3%A7%C3%A3o! %F0%9F%98%8A','%F0%9F%96%A8%EF%B8%8F EvolutUrban DTF Pro'];
+  var msg=p.join(NL);
+  getClientes().then(function(cls){
+    var c=cls.find(function(x){return x.nome===cli;});
+    var tel=c&&c.tel?c.tel.replace(/[^0-9]/g,''):'';
+    var url=tel?'https://wa.me/55'+tel+'?text='+msg:'https://wa.me/?text='+msg;
+    window.open(url,'_blank');
+  });
 }
 
 async function darBaixa(ts){
