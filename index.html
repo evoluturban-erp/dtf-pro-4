@@ -718,7 +718,8 @@ async function finTab(t,btn){
       if(!pg){
         acoes+='<button class="btn btn-xs btn-p" onclick="darBaixa(&quot;'+ts+'&quot;)" title="Dar baixa">Baixa</button> ';
         acoes+='<button class="btn btn-xs btn-b" onclick="imprimirCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;)" title="Imprimir"><i class="ti ti-printer"></i></button> ';
-        acoes+='<button class="btn btn-xs" style="background:#25D366;color:#fff;border-color:#25D366" onclick="whatsappCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;,&quot;'+obs+'&quot;)" title="WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>';
+        var obsEnc=encodeURIComponent(String(r[10]||''));
+        acoes+='<button class="btn btn-xs" style="background:#25D366;color:#fff;border-color:#25D366" onclick="whatsappCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;,decodeURIComponent(&quot;'+obsEnc+'&quot;))" title="WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>';
       }
       rows+='<tr><td>'+fmtData(r[1])+'</td><td><strong>'+(r[3]||'')+'</strong></td><td style="font-size:12px;color:var(--text2)">'+(r[6]||'')+'</td><td style="font-size:11px">'+periodoCell+'</td><td><strong>'+fmtR(r[5])+'</strong></td><td'+(at?' style="color:var(--red);font-weight:500"':'')+'>'+fmtData(r[4])+'</td><td><span class="badge '+(pg?'b-g':at?'b-r':'b-a')+'">'+(pg?'pago':at?'vencido':'pendente')+'</span></td><td style="white-space:nowrap">'+acoes+'</td></tr>';
     });
