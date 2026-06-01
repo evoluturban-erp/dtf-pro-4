@@ -715,9 +715,8 @@ async function finTab(t,btn){
       }
       var periodoCell=deStr?'<span style="font-size:11px;color:var(--text2)">'+deStr+'</span><br><span style="font-size:11px;color:var(--text2)">'+ateStr+'</span>':'<span style="font-size:11px;color:var(--text3)">-</span>';
       var acoes='';
+      _finObsMap[String(r[0]||'')]=String(r[10]||'');
       if(!pg){
-        _finObsMap=_finObsMap||{};
-        _finObsMap[String(r[0]||'')]=String(r[10]||'');
         acoes+='<button class="btn btn-xs btn-p" onclick="darBaixa(&quot;'+ts+'&quot;)" title="Dar baixa">Baixa</button> ';
         acoes+='<button class="btn btn-xs btn-b" onclick="imprimirCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;)" title="Imprimir"><i class="ti ti-printer"></i></button> ';
         acoes+='<button class="btn btn-xs" style="background:#25D366;color:#fff;border-color:#25D366" onclick="whatsappCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;,&quot;'+ts+'&quot;)" title="WhatsApp"><i class="ti ti-brand-whatsapp"></i></button>';
@@ -934,6 +933,7 @@ async function salvarConta(){var cli=v('nc-cli').trim(),val=parseFloat(v('nc-val
 function calcVencimento(ciclo,dataRef){var d=new Date(dataRef||today());if(ciclo==='semanal'){var df=(5-d.getDay()+7)%7||7;d.setDate(d.getDate()+df);}else if(ciclo==='quinzenal'){d.setDate(d.getDate()<=15?15:new Date(d.getFullYear(),d.getMonth()+1,0).getDate());}else if(ciclo==='mensal'){d.setDate(new Date(d.getFullYear(),d.getMonth()+1,0).getDate());}else{d.setDate(d.getDate()+7);}return d.toISOString().split('T')[0];}
 
 var _jobsFech=[];
+var _finObsMap={};
 async function carregarJobsCliente(){
   var cliNome=v('fech-cli'),de=v('fech-de'),ate=v('fech-ate'),el=$('fech-jobs-panel');
   if(!el)return;if(!cliNome){el.innerHTML='';return;}
