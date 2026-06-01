@@ -787,7 +787,6 @@ async function imprimirCobranca(cli,ref,val,venc){
 
 async function whatsappCobranca(cli,ref,val,venc){
   toast('Buscando jobs...',3000);
-  // Extrai data do fechamento da referencia ex: "Fechamento 31/05/2026"
   var dateFetch=ref.match(/(\d{2})\/(\d{2})\/(\d{4})/);
   var pedRows=_cache['pedidos']||await apiGet('pedidos');
   var jobs=[];
@@ -796,12 +795,10 @@ async function whatsappCobranca(cli,ref,val,venc){
     jobs=pedRows.slice(1).filter(function(r){
       if(String(r[3]||'').trim().toLowerCase()!==cli.trim().toLowerCase())return false;
       if(String(r[9]||'')==='DELETADO')return false;
-      // Filtra pelo mes/ano da referencia
       var d=String(r[1]||'');
       return d.indexOf('/'+mes+'/'+ano)>-1||d.indexOf('-'+mes+'-'+ano)>-1||d.indexOf(ano+'-'+mes)>-1;
     });
   }
-  // Fallback sem filtro de data
   if(!jobs.length){
     jobs=pedRows.slice(1).filter(function(r){
       return String(r[3]||'').trim().toLowerCase()===cli.trim().toLowerCase()
@@ -817,10 +814,17 @@ async function whatsappCobranca(cli,ref,val,venc){
   var ciclo=c&&c.ciclo?c.ciclo.toLowerCase():'';
   var cicloTitulo=ciclo==='semanal'?'Fechamento Semanal':ciclo==='quinzenal'?'Fechamento Quinzenal':ciclo==='mensal'?'Fechamento Mensal':'Fechamento';
   var chavePix=c&&c.pix?c.pix:'';
+  // Calcula periodo: primeiro dia do mes ate a data da referencia
+  var periodoStr='';
+  if(dateFetch){
+    var mes=dateFetch[2],ano=dateFetch[3];
+    periodoStr='01/'+mes+'/'+ano+' a '+dateFetch[1]+'/'+mes+'/'+ano;
+  }
   var L=[];
   L.push('*DTF Pro - '+cicloTitulo+'*');
   L.push('--------------------');
   L.push('Cliente: '+cli);
+  if(periodoStr)L.push('Período: '+periodoStr);
   L.push('Ref: '+ref);
   L.push('');
   L.push('*Servicos:*');
