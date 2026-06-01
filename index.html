@@ -1008,24 +1008,37 @@ function salvarHTMLFech(nome){var el=$('doc-fechamento');if(!el){toast('Gere o f
 function enviarWAFech(nome,totM,totV,venc,chavePix,saldoDev){
   var sel=_jobsFech.filter(function(r){return r._sel;});
   var porDia={};sel.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
-  var totSvc=sel.reduce(function(s,r){return s+(parseFloat(r[7])||0);},0);
-  var NL='%0A';
   var de=v('fech-de'),ate=v('fech-ate')||today();
   var periodo=(de?fmtData(de)+' a ':'')+fmtData(ate);
-
-  // Detecta ciclo do cliente para titulo
-  var cicloTitulo='Fechamento Personalizado';
   getClientes().then(function(cls){
     var cli=cls.find(function(c){return c.nome===nome;});
     var ciclo=cli&&cli.ciclo?cli.ciclo.toLowerCase():'';
-    if(ciclo==='semanal')cicloTitulo='Fechamento Semanal';
-    else if(ciclo==='quinzenal')cicloTitulo='Fechamento Quinzenal';
-    else if(ciclo==='mensal')cicloTitulo='Fechamento Mensal';
-
-    var p=[];
-    var msg=encodeURIComponent(L.join('\n'));
+    var cicloTitulo=ciclo==='semanal'?'Fechamento Semanal':ciclo==='quinzenal'?'Fechamento Quinzenal':ciclo==='mensal'?'Fechamento Mensal':'Fechamento';
     var tel=cli&&cli.tel?cli.tel.replace(/[^0-9]/g,''):'';
-    var url=tel?'https://wa.me/55'+tel+'?text='+msg:'https://wa.me/?text='+msg;
+    var L=[];
+    L.push('*DTF Pro - '+cicloTitulo+'*');
+    L.push('--------------------');
+    L.push('Cliente: '+nome);
+    if(periodo)L.push('Periodo: '+periodo);
+    L.push('');
+    L.push('*Servicos:*');
+    Object.keys(porDia).sort().forEach(function(dia){
+      L.push('');
+      L.push('*'+fmtData(dia)+'*');
+      porDia[dia].forEach(function(r){L.push('- '+(r[10]||r[3]||'-')+' | '+fmt(r[5])+'m | '+fmtR(r[7]));});
+    });
+    L.push('');
+    L.push('--------------------');
+    L.push('Metragem total: '+fmt(totM)+'m');
+    L.push('*TOTAL: '+fmtR(totV)+'*');
+    if(chavePix)L.push('Pix: '+chavePix);
+    L.push('');
+    L.push('Por favor, confira os itens acima.');
+    L.push('Em caso de duvidas, estamos a disposicao!');
+    L.push('EvolutUrban DTF Pro');
+    var msg=encodeURIComponent(L.join('\n'));
+    var tel2=tel||'';
+    var url=tel2?'https://wa.me/55'+tel2+'?text='+msg:'https://wa.me/?text='+msg;
     window.open(url,'_blank');
   });
 }
