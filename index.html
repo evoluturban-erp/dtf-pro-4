@@ -1046,7 +1046,9 @@ function enviarWAFech(nome,totM,totV,venc,chavePix,saldoDev){
 async function lancarCtaReceber(nome,valor,venc,ctDesc,saldoDev,tsExistente,periodoDE,periodoATE){
   var btn=$('btn-lancar-fin');if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Salvando...';}
   var ref='Fechamento '+new Date().toLocaleDateString('pt-BR')+(saldoDev>0?' (incl. saldo '+fmtR(saldoDev)+')':'');
-  var obsVal='periodo:'+( periodoDE||'')+' a '+(periodoATE||today());
+  // Converte datas para DD/MM/YYYY se vierem em YYYY-MM-DD
+  function fmtObsDate(d){if(!d)return '';var p=d.split('-');if(p.length===3&&p[0].length===4)return p[2]+'/'+p[1]+'/'+p[0];return d;}
+  var obsVal='periodo:'+fmtObsDate(periodoDE)+' a '+fmtObsDate(periodoATE||today());
   try{
     if(tsExistente){
       // Atualiza cobranca existente via upsert
