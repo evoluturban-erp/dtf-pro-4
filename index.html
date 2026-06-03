@@ -347,7 +347,14 @@ function setTheme(t){document.documentElement.setAttribute('data-theme',t==='lig
 function initTheme(){setTheme(store.get('dtf_theme')||'light');}
 
 var PAGE_TITLES={dashboard:'Dashboard',alertas:'Alertas',clientes:'Clientes',pedidos:'Pedidos',financeiro:'Financeiro',producao:'Lancamento de Producao',importar:'Importar Arquivo',insumos:'Insumos',relatorios:'Relatorios',config:'Configuracoes'};
-function goNav(id){NAV=id;document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});var ni=$('nav-'+id);if(ni)ni.classList.add('active');var pt=$('page-title');if(pt)pt.textContent=PAGE_TITLES[id]||id;$('main-content').innerHTML='<div class="loading"><span class="spin spin-dark"></span> Carregando...</div>';var fn={dashboard:renderDashboard,alertas:renderAlertas,clientes:renderClientes,pedidos:renderPedidos,financeiro:renderFinanceiro,producao:renderProducao,importar:renderImportar,insumos:renderInsumos,relatorios:renderRelatorios,config:renderConfig};if(fn[id])fn[id]();else renderDashboard();}
+var OPERADOR_BLOQUEADOS=['pedidos','financeiro','importar','insumos','relatorios','config'];
+function goNav(id){
+  if(CU&&CU.perfil!=='admin'&&OPERADOR_BLOQUEADOS.indexOf(id)>=0){
+    $('main-content').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:12px"><i class="ti ti-lock" style="font-size:48px;color:var(--border2)"></i><p style="font-size:15px;font-weight:600;color:var(--text2)">Acesso restrito</p><p style="font-size:13px;color:var(--text3)">Este modulo e disponivel apenas para administradores.</p></div>';
+    return;
+  }
+  NAV=id;document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});var ni=$('nav-'+id);if(ni)ni.classList.add('active');var pt=$('page-title');if(pt)pt.textContent=PAGE_TITLES[id]||id;$('main-content').innerHTML='<div class="loading"><span class="spin spin-dark"></span> Carregando...</div>';var fn={dashboard:renderDashboard,alertas:renderAlertas,clientes:renderClientes,pedidos:renderPedidos,financeiro:renderFinanceiro,producao:renderProducao,importar:renderImportar,insumos:renderInsumos,relatorios:renderRelatorios,config:renderConfig};if(fn[id])fn[id]();else renderDashboard();
+}
 function toggleMenu(){var sb=$('sidebar');if(sb)sb.classList.toggle('open');}
 
 function initShell(){
@@ -355,7 +362,18 @@ function initShell(){
   var un=$('user-name'),ua=$('user-avatar'),ur=$('user-role');
   if(un)un.textContent=CU.nome;if(ua)ua.textContent=CU.nome.substring(0,2).toUpperCase();
   if(ur)ur.textContent=isA?'Admin':'Operador - Imp.'+(CU.maquina||1);
-  if(!isA){var s1=$('nav-admin-section'),s2=$('nav-admin-section2');if(s1)s1.style.display='none';if(s2)s2.style.display='none';}
+  if(!isA){
+    // Operador: esconde Pedidos, Financeiro da secao Comercial (mantém Clientes visível)
+    var navPedidos=$('nav-pedidos'),navFin=$('nav-financeiro');
+    if(navPedidos)navPedidos.style.display='none';
+    if(navFin)navFin.style.display='none';
+    // Operador: esconde Importar e Insumos da secao Operacao
+    var navImp=$('nav-importar'),navIns=$('nav-insumos');
+    if(navImp)navImp.style.display='none';
+    if(navIns)navIns.style.display='none';
+    // Operador: esconde secao Analise (Relatorios e Config)
+    var s2=$('nav-admin-section2');if(s2)s2.style.display='none';
+  }
   var td=$('top-date');if(td)td.textContent=new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
   goNav(isA?'dashboard':'producao');checkAlertas();checkStatusDB();
 }
@@ -429,11 +447,11 @@ async function renderAlertas(){
 }
 async function renderClientes(){
   var mc=$('main-content');
+  var isAdmin=CU&&CU.perfil==='admin';
   mc.innerHTML='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">'
-    +'<input id="cli-busca" placeholder="Buscar..." oninput="filtrarClis()" style="flex:1;min-width:160px;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px">'
-    +'<select id="cli-ciclo" onchange="filtrarClis()" style="padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px">'
-    +'<option value="">Todos os ciclos</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="mensal">Mensal</option><option value="avulso">Avulso</option></select>'
-    +'<button class="btn btn-p btn-sm" onclick="abrirFormCliente()"><i class="ti ti-plus"></i> Novo cliente</button>'
+    +'<input id="cli-busca" placeholder="Buscar por nome ou telefone..." oninput="filtrarClis()" style="flex:1;min-width:160px;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px">'
+    +(isAdmin?'<select id="cli-ciclo" onchange="filtrarClis()" style="padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px"><option value="">Todos os ciclos</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="mensal">Mensal</option><option value="avulso">Avulso</option></select>':'<select id="cli-ciclo" style="display:none"></select>')
+    +(isAdmin?'<button class="btn btn-p btn-sm" onclick="abrirFormCliente()"><i class="ti ti-plus"></i> Novo cliente</button>':'')
     +'</div><div id="lista-clis"><div class="loading"><span class="spin spin-dark"></span></div></div>';
   filtrarClis();
 }
@@ -446,35 +464,42 @@ async function filtrarClis(){
   var el=$('lista-clis');if(!el)return;
   if(!cls.length){el.innerHTML='<div class="loading" style="padding:2rem">Nenhum cliente encontrado.</div>';return;}
   var cc={semanal:'b-g',quinzenal:'b-b',mensal:'b-a',avulso:'b-gray'};
+  var isAdmin=CU&&CU.perfil==='admin';
   var html='';
   cls.forEach(function(c){
     var hist=c.historicoPrecos||[];
     var pa=hist.length?hist[hist.length-1].preco:parseFloat(c.preco_m||0);
     var inf='';
     if(c.tel)inf+='<span style="font-size:12px;color:var(--text2)"><i class="ti ti-phone" style="font-size:13px"></i> '+c.tel+'</span>';
-    if(c.email)inf+='<span style="font-size:12px;color:var(--text2)"><i class="ti ti-mail" style="font-size:13px"></i> '+c.email+'</span>';
-    if(c.pgto)inf+='<span style="font-size:12px;color:var(--text2)"><i class="ti ti-credit-card" style="font-size:13px"></i> '+c.pgto+'</span>';
+    if(isAdmin&&c.email)inf+='<span style="font-size:12px;color:var(--text2)"><i class="ti ti-mail" style="font-size:13px"></i> '+c.email+'</span>';
+    if(isAdmin&&c.pgto)inf+='<span style="font-size:12px;color:var(--text2)"><i class="ti ti-credit-card" style="font-size:13px"></i> '+c.pgto+'</span>';
     var sb='';
-    if(c.saldoDevedor>0)sb='<button class="btn btn-sm" style="background:var(--amber-bg);color:var(--amber);border-color:#ffd97a" onclick="verHistPag(\''+c.nome.replace(/\\/g,'\\\\').replace(/'/g,'\\\'')+'\')">'+fmtR(c.saldoDevedor)+'</button>';
+    if(isAdmin&&c.saldoDevedor>0)sb='<button class="btn btn-sm" style="background:var(--amber-bg);color:var(--amber);border-color:#ffd97a" onclick="verHistPag(''+c.nome.replace(/\/g,'\\').replace(/'/g,'\'')+'')" >'+fmtR(c.saldoDevedor)+'</button>';
+    var acoes='';
+    if(isAdmin){
+      acoes='<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">'
+        +'<button class="btn btn-sm" onclick="editarCli('+c.id+')" title="Editar">Edit</button>'
+        +'<button class="btn btn-sm" onclick="verHistCli('+c.id+')" title="Historico">Hist</button>'
+        +sb
+        +'<button class="btn btn-sm btn-r" onclick="remCli('+c.id+')" title="Excluir">Del</button>'
+        +'</div>';
+    }
     html+='<div class="card" style="padding:14px 16px">'
       +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">'
       +'<div style="flex:1;min-width:0">'
       +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
       +'<p style="font-weight:600;font-size:14px">'+c.nome+'</p>'
-      +'<span class="badge '+(cc[c.ciclo]||'b-gray')+'">'+(c.ciclo||'avulso')+'</span>'
-      +'<span class="badge b-g" style="font-weight:600">'+fmtR(pa)+'/m</span>'
-      +(hist.length>1?'<span style="font-size:11px;color:var(--text3)">'+hist.length+' precos</span>':'')
+      +(isAdmin?'<span class="badge '+(cc[c.ciclo]||'b-gray')+'">'+(c.ciclo||'avulso')+'</span>':'')
+      +(isAdmin?'<span class="badge b-g" style="font-weight:600">'+fmtR(pa)+'/m</span>':'')
+      +(isAdmin&&hist.length>1?'<span style="font-size:11px;color:var(--text3)">'+hist.length+' precos</span>':'')
       +'</div>'
       +'<div style="display:flex;gap:16px;flex-wrap:wrap">'+inf+'</div></div>'
-      +'<div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">'
-      +'<button class="btn btn-sm" onclick="editarCli('+c.id+')" title="Editar">Edit</button>'
-      +'<button class="btn btn-sm" onclick="verHistCli('+c.id+')" title="Historico">Hist</button>'
-      +sb
-      +'<button class="btn btn-sm btn-r" onclick="remCli('+c.id+')" title="Excluir">Del</button>'
-      +'</div></div></div>';
+      +acoes
+      +'</div></div>';
   });
   el.innerHTML=html;
 }
+
 
 var _editCliId=null;
 async function abrirFormCliente(id){
