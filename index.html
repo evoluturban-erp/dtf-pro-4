@@ -311,11 +311,15 @@ function getUsers(){if(_usersCache)return _usersCache;try{var s=store.get('dtf_u
 async function syncUser(u){try{await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'upsert',aba:'usuarios',key:API_KEY,id_col:0,id_val:u.id,headers:['id','nome','login','senha','perfil','maquina','ativo'],row:[u.id,u.nome,u.login,u.senha,u.perfil,u.maquina||1,u.ativo!==false]})});}catch(e){}delete _cache['usuarios'];_usersCache=null;store.set('dtf_users',null);}
 async function loadUsersFromSheets(){try{var rows=await apiGet('usuarios',false);if(rows.length>1){var users=rows.slice(1).filter(function(r){return r[0]&&r[6]!=='DELETADO';}).map(function(r){return{id:r[0],nome:r[1]||'',login:r[2]||'',senha:r[3]||'',perfil:r[4]||'operador',maquina:parseInt(r[5])||1,ativo:r[6]!=='false'};});_usersCache=users;store.set('dtf_users',users);return users;}}catch(e){}return getUsers();}
 
-function doLogin(){
+async function doLogin(){
   var login=v('l-login').trim(),senha=v('l-senha');
   var erroEl=$('login-erro');
   if(erroEl)erroEl.textContent='';
   if(!login||!senha){if(erroEl)erroEl.textContent='Preencha login e senha';toast('Preencha login e senha');return;}
+  var btn=document.querySelector('#login-page .btn-p');if(btn){btn.disabled=true;btn.textContent='Verificando...';}
+  // Busca usuarios da planilha primeiro (garante senhas atualizadas)
+  try{await loadUsersFromSheets();}catch(e){}
+  if(btn){btn.disabled=false;btn.innerHTML='<i class="ti ti-login"></i> Entrar';}
   var u=getUsers().find(function(u){return u.login===login&&u.senha===senha;});
   if(!u){if(erroEl)erroEl.textContent='Login ou senha incorretos';toast('Login ou senha incorretos');return;}
   if(u.ativo===false){if(erroEl)erroEl.textContent='Acesso bloqueado. Contate o administrador.';toast('Acesso bloqueado. Contate o administrador.');return;}
