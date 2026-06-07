@@ -913,6 +913,9 @@ async function confirmarBaixa(ts,cli,vT){
   var dataPgtoFmt=fmtData(dataPgtoISO);
   var saldo=Math.round((vT-vP)*100)/100;
   await apiPost('baixas',['timestamp_orig','data_baixa','status','valor_pago','saldo','forma_pgto','obs'],[ts,dataPgtoFmt,tipo==='total'?'pago_total':'pago_parcial',vP,saldo,pgto,obs]);
+  // Atualiza status da conta original no financeiro para recebido/parcial
+  var novoStatus=saldo>0?'parcial':'recebido';
+  await apiUpsert('financeiro',0,ts,['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[ts,dataPgtoISO,'receber',cli,'',vP,'','',novoStatus,'Baixa em '+dataPgtoFmt]);
   var cls=await getClientes();var idx=cls.findIndex(function(c){return c.nome===cli;});
   if(idx>=0){if(!cls[idx].historicoPagamentos)cls[idx].historicoPagamentos=[];cls[idx].historicoPagamentos.push({data:dataPgtoFmt,valorPago:vP,saldoDepois:saldo>0?saldo:0,pgto:pgto,obs:obs});cls[idx].saldoDevedor=saldo>0?saldo:0;cls[idx].ultimaBaixa=dataPgtoFmt;saveClientes(cls);syncCliente(cls[idx]);}
   var mb=document.querySelector('.modal-bg');if(mb)mb.remove();delete _cache['financeiro'];
