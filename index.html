@@ -896,6 +896,7 @@ async function darBaixa(ts){
     +'<div style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:14px"><p style="font-size:12px;color:var(--text2)">Cliente: <strong>'+cli+'</strong></p><p style="font-size:12px;color:var(--text2)">Valor total: <strong style="font-size:15px">'+fmtR(vT)+'</strong></p></div>'
     +'<div class="f"><label>Tipo</label><select id="baixa-tipo" onchange="toggleBaixaParcial()"><option value="total">Pagamento total - '+fmtR(vT)+'</option><option value="parcial">Pagamento parcial</option></select></div>'
     +'<div class="f hidden" id="baixa-parcial-field"><label>Valor pago (R$)</label><input type="number" id="baixa-valor" placeholder="0,00" min="0" step="0.01" style="font-size:16px;font-weight:600" max="'+vT+'"></div>'
+    +'<div class="f"><label>Data do pagamento</label><input type="date" id="baixa-data" value="'+today()+'"></div>'
     +'<div class="f"><label>Forma de pagamento</label><select id="baixa-pgto"><option>Pix</option><option>Transferencia</option><option>Dinheiro</option><option>Boleto</option></select></div>'
     +'<div class="f"><label>Observacao</label><input id="baixa-obs" placeholder="Opcional"></div>'
     +'<button class="btn btn-p btn-full" style="margin-top:4px" onclick="confirmarBaixa(\''+ts+'\',\''+cli.replace(/\\/g,'\\\\').replace(/'/g,'\\\'')+'\','+vT+')"><i class="ti ti-check"></i> Confirmar pagamento</button></div>';
@@ -907,13 +908,16 @@ function toggleBaixaParcial(){var tipo=v('baixa-tipo');var f=$('baixa-parcial-fi
 async function confirmarBaixa(ts,cli,vT){
   var tipo=v('baixa-tipo'),pgto=v('baixa-pgto'),obs=v('baixa-obs'),vP=vT;
   if(tipo==='parcial'){vP=parseFloat(v('baixa-valor'))||0;if(!vP||vP<=0){toast('Informe o valor pago');return;}if(vP>vT){toast('Valor maior que o total');return;}}
+  // Data informada pelo usuario (campo baixa-data), fallback para hoje
+  var dataPgtoISO=v('baixa-data')||today();
+  var dataPgtoFmt=fmtData(dataPgtoISO);
   var saldo=Math.round((vT-vP)*100)/100;
-  await apiPost('baixas',['timestamp_orig','data_baixa','status','valor_pago','saldo','forma_pgto','obs'],[ts,nowStr(),tipo==='total'?'pago_total':'pago_parcial',vP,saldo,pgto,obs]);
+  await apiPost('baixas',['timestamp_orig','data_baixa','status','valor_pago','saldo','forma_pgto','obs'],[ts,dataPgtoFmt,tipo==='total'?'pago_total':'pago_parcial',vP,saldo,pgto,obs]);
   var cls=await getClientes();var idx=cls.findIndex(function(c){return c.nome===cli;});
-  if(idx>=0){if(!cls[idx].historicoPagamentos)cls[idx].historicoPagamentos=[];cls[idx].historicoPagamentos.push({data:new Date().toLocaleDateString('pt-BR'),valorPago:vP,saldoDepois:saldo>0?saldo:0,pgto:pgto,obs:obs});cls[idx].saldoDevedor=saldo>0?saldo:0;cls[idx].ultimaBaixa=new Date().toLocaleDateString('pt-BR');saveClientes(cls);syncCliente(cls[idx]);}
+  if(idx>=0){if(!cls[idx].historicoPagamentos)cls[idx].historicoPagamentos=[];cls[idx].historicoPagamentos.push({data:dataPgtoFmt,valorPago:vP,saldoDepois:saldo>0?saldo:0,pgto:pgto,obs:obs});cls[idx].saldoDevedor=saldo>0?saldo:0;cls[idx].ultimaBaixa=dataPgtoFmt;saveClientes(cls);syncCliente(cls[idx]);}
   var mb=document.querySelector('.modal-bg');if(mb)mb.remove();delete _cache['financeiro'];
-  if(saldo>0){var cli2=idx>=0?cls[idx]:null;var pV=calcVencimento(cli2?cli2.ciclo:null,today());await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),today(),'receber',cli,pV,saldo,'Saldo devedor (pago '+fmtR(vP)+' de '+fmtR(vT)+')',pgto,'pendente','saldo devedor automatico']);renderFinanceiro();setTimeout(function(){abrirModalAtualizSaldo(cli,vP,saldo);},400);}
-  else{toast('Pagamento total registrado!');renderFinanceiro();}
+  if(saldo>0){var cli2=idx>=0?cls[idx]:null;var pV=calcVencimento(cli2?cli2.ciclo:null,dataPgtoISO);await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),dataPgtoISO,'receber',cli,pV,saldo,'Saldo devedor (pago '+fmtR(vP)+' de '+fmtR(vT)+' em '+dataPgtoFmt+')',pgto,'pendente','saldo devedor automatico']);renderFinanceiro();setTimeout(function(){abrirModalAtualizSaldo(cli,vP,saldo);},400);}
+  else{toast('Pagamento de '+fmtR(vP)+' registrado em '+dataPgtoFmt+'!');renderFinanceiro();}
 }
 
 function abrirModalAtualizSaldo(cli,vP,saldo){
