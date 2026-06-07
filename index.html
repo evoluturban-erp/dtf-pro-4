@@ -282,7 +282,7 @@ function toast(msg,dur){var t=$('toast');if(!t)return;t.textContent=msg;t.classL
 function fmtR(x){return 'R$ '+(parseFloat(x)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function fmt(x,d){return (parseFloat(x)||0).toFixed(d===undefined?2:d);}
 function today(){return new Date().toISOString().split('T')[0];}
-function nowStr(){return new Date().toLocaleString('pt-BR');}
+function nowStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')+'T'+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');}
 function fmtData(d){if(!d)return '';var s=String(d).trim();if(/^\d{4}-\d{2}-\d{2}/.test(s)){var p=s.split('T')[0].split('-');return p[2]+'/'+p[1]+'/'+p[0];}return s;}
 function safeJSON(str,def){try{return str?JSON.parse(str):def;}catch(e){return def;}}
 function diffDays(d1,d2){return Math.round((new Date(d2)-new Date(d1))/86400000);}
