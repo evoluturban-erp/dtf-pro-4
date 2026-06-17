@@ -299,11 +299,17 @@ async function apiGet(aba,force){
   if(!force&&_cache[aba]&&Date.now()-_cache[aba].ts<60000)return _cache[aba].data;
   try{var r=await fetch(API+'?aba='+encodeURIComponent(aba)+'&key='+API_KEY);var d=await r.json();var data=d.ok?d.rows:[];_cache[aba]={data:data,ts:Date.now()};return data;}catch(e){return[];}
 }
+function _enviarServidor(body){
+  try{fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});}catch(e){}
+}
 async function apiPost(aba,headers,row){
-  try{await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'append',aba:aba,headers:headers,row:row,key:API_KEY})});delete _cache[aba];return true;}catch(e){return false;}
+  if(_cache[aba]&&_cache[aba].data){_cache[aba].data.push(row);_cache[aba].ts=Date.now();}
+  _enviarServidor({acao:'append',aba:aba,headers:headers,row:row,key:API_KEY});
+  return true;
 }
 async function apiUpsert(aba,idCol,idVal,headers,row){
-  try{await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'upsert',aba:aba,id_col:idCol,id_val:idVal,headers:headers,row:row,key:API_KEY})});delete _cache[aba];}catch(e){}
+  if(_cache[aba]&&_cache[aba].data){var idx=_cache[aba].data.findIndex(function(r){return String(r[idCol])===String(idVal);});if(idx>=0)_cache[aba].data[idx]=row;else _cache[aba].data.push(row);_cache[aba].ts=Date.now();}
+  _enviarServidor({acao:'upsert',aba:aba,id_col:idCol,id_val:idVal,headers:headers,row:row,key:API_KEY});
 }
 function syncData(){_cache={};var btn=$('btn-sync');if(btn)btn.innerHTML='<span class="spin spin-dark"></span>';setTimeout(function(){if(btn)btn.innerHTML='<i class="ti ti-refresh"></i>';goNav(NAV);},800);toast('Dados atualizados');}
 
@@ -938,17 +944,9 @@ async function confirmarBaixa(ts,cli,vT,tipoConta){
   if(contaOrig){
     var obsExtra=String(contaOrig[10]||'');
     var novaObs=(isPagar?'Pago em ':'Recebido em ')+dataPgtoFmt+(obs?' - '+obs:'');
-    var novaRow=[contaOrig[0],contaOrig[1],contaOrig[2],contaOrig[3],contaOrig[4],contaOrig[5],contaOrig[6],pgto,novoStatus,novaObs,obsExtra];
     await apiUpsert('financeiro',0,ts,
       ['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs','obs2'],
-      novaRow);
-    // Atualiza cache local imediatamente sem depender do Apps Script responder
-    if(_cache['financeiro']&&_cache['financeiro'].data){
-      var idx2=_cache['financeiro'].data.findIndex(function(r){return String(r[0])===String(ts);});
-      if(idx2>=0)_cache['financeiro'].data[idx2]=novaRow;
-      // Força timestamp do cache para agora para nao expirar antes do dashboard carregar
-      _cache['financeiro'].ts=Date.now();
-    }
+      [contaOrig[0],contaOrig[1],contaOrig[2],contaOrig[3],contaOrig[4],contaOrig[5],contaOrig[6],pgto,novoStatus,novaObs,obsExtra]);
   }
   // Saldo devedor so para contas a receber
   if(!isPagar){
