@@ -385,6 +385,7 @@ function initShell(){  var isA=CU.perfil==='admin';
   goNav(isA?'dashboard':'producao');checkAlertas();checkStatusDB();
 }
 async function renderDashboard(){
+  delete _cache['financeiro'];delete _cache['pedidos'];delete _cache['producao'];
   var prod=await apiGet('producao'),fin=await apiGet('financeiro'),ped=await apiGet('pedidos');
   var pd=prod.slice(1),fd=fin.slice(1),pedd=ped.slice(1);
   function sc(a,c){return a.reduce(function(s,r){return s+(parseFloat(r[c])||0);},0);}
@@ -441,9 +442,10 @@ async function checkStatusDB(){
   }catch(e){if(el)el.innerHTML='<p style="color:var(--text3)">Erro ao verificar.</p>';}
 }
 
-async function checkAlertas(){try{var fin=await apiGet('financeiro');var hoje=today();var count=0;fin.slice(1).forEach(function(r){if(r[8]==='pago'||r[8]==='recebido')return;if(r[4]&&r[4]<=hoje)count++;});var b=$('badge-alertas');if(b){b.textContent=count;b.style.display=count?'inline':'none';}}catch(e){}}
+async function checkAlertas(){try{delete _cache['financeiro'];var fin=await apiGet('financeiro');var hoje=today();var count=0;fin.slice(1).forEach(function(r){if(r[8]==='pago'||r[8]==='recebido'||r[8]==='parcial')return;if(r[4]&&r[4]<=hoje)count++;});var b=$('badge-alertas');if(b){b.textContent=count;b.style.display=count?'inline':'none';}}catch(e){}}
 
 async function renderAlertas(){
+  delete _cache['financeiro'];
   var fin=await apiGet('financeiro');var hoje=today();var alertas=[];
   fin.slice(1).forEach(function(r){if(r[8]==='pago'||r[8]==='recebido')return;if(!r[4])return;var d=diffDays(hoje,r[4]);if(d<0)alertas.push({tipo:'r',msg:'<strong>'+(r[3]||'?')+'</strong> - '+fmtR(r[5])+' venceu ha '+Math.abs(d)+' dia(s)'});else if(d<=2)alertas.push({tipo:'a',msg:'<strong>'+(r[3]||'?')+'</strong> - '+fmtR(r[5])+' vence em '+(d===0?'hoje':d+' dia(s)')});});
   var cls=await getClientes();cls.forEach(function(c){if(c.saldoDevedor>0)alertas.push({tipo:'a',msg:'<strong>'+c.nome+'</strong> - Saldo devedor: '+fmtR(c.saldoDevedor)});});
@@ -948,12 +950,17 @@ async function confirmarBaixa(ts,cli,vT,tipoConta){
     if(idx>=0){if(!cls[idx].historicoPagamentos)cls[idx].historicoPagamentos=[];cls[idx].historicoPagamentos.push({data:dataPgtoFmt,valorPago:vP,saldoDepois:saldo>0?saldo:0,pgto:pgto,obs:obs});cls[idx].saldoDevedor=saldo>0?saldo:0;cls[idx].ultimaBaixa=dataPgtoFmt;saveClientes(cls);syncCliente(cls[idx]);}
   }
   var mb=document.querySelector('.modal-bg');if(mb)mb.remove();delete _cache['financeiro'];
+  toast('Salvando...');
+  await new Promise(function(r){setTimeout(r,1200);});
+  delete _cache['financeiro'];delete _cache['clientes'];
   if(!isPagar&&saldo>0){
     var cls2=await getClientes();var cli2=cls2.find(function(c){return c.nome===cli;});var pV=calcVencimento(cli2?cli2.ciclo:null,dataPgtoISO);
     await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),dataPgtoISO,'receber',cli,pV,saldo,'Saldo devedor (pago '+fmtR(vP)+' de '+fmtR(vT)+' em '+dataPgtoFmt+')',pgto,'pendente','saldo devedor automatico']);
     renderFinanceiro();setTimeout(function(){abrirModalAtualizSaldo(cli,vP,saldo);},400);
   }else{
-    toast((isPagar?'Pagamento de ':'Recebimento de ')+fmtR(vP)+' registrado em '+dataPgtoFmt+'!');renderFinanceiro();
+    toast((isPagar?'Pagamento de ':'Recebimento de ')+fmtR(vP)+' registrado em '+dataPgtoFmt+'!');
+    renderFinanceiro();
+    setTimeout(function(){delete _cache['financeiro'];checkAlertas();},1500);
   }
 }
 
