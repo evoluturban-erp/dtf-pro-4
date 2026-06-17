@@ -135,12 +135,18 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-
 .modal{background:var(--surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;box-shadow:0 20px 40px rgba(0,0,0,.15)}
 /* -- RESPONSIVE -- */
 @media(max-width:768px){
-  .sidebar{transform:translateX(-100%);transition:transform .2s}
+  .sidebar{transform:translateX(-100%);transition:transform .25s ease}
   .sidebar.open{transform:translateX(0)}
   .main{margin-left:0;height:100vh}
   .g4{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr}
+  #menu-toggle{display:inline-flex!important}
+  .topbar{padding:0 12px}
+  .content{padding:12px}
 }
+/* Overlay para fechar sidebar no mobile */
+#sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:99}
+#sidebar-overlay.on{display:block}
 /* Forcao altura */
 html,body{height:100%;max-height:100vh;overflow:hidden}
 .shell{height:100vh;max-height:100vh;overflow:hidden}
@@ -232,7 +238,7 @@ html,body{height:100%;max-height:100vh;overflow:hidden}
   <div class="main">
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:12px">
-        <button class="btn btn-sm" id="menu-toggle" style="display:none" onclick="toggleMenu()"><i class="ti ti-menu-2"></i></button>
+        <button class="btn btn-sm" id="menu-toggle" style="display:none;padding:6px 10px" onclick="toggleMenu()"><i class="ti ti-menu-2"></i></button>
         <p style="font-size:15px;font-weight:600" id="page-title">Dashboard</p>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -261,6 +267,7 @@ html,body{height:100%;max-height:100vh;overflow:hidden}
 
 </div>
 
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -348,17 +355,17 @@ function initTheme(){setTheme(store.get('dtf_theme')||'light');}
 
 var PAGE_TITLES={dashboard:'Dashboard',alertas:'Alertas',clientes:'Clientes',pedidos:'Pedidos',financeiro:'Financeiro',producao:'Lancamento de Producao',importar:'Importar Arquivo',insumos:'Insumos',relatorios:'Relatorios',config:'Configuracoes'};
 var OPERADOR_BLOQUEADOS=['pedidos','financeiro','importar','insumos','relatorios','config'];
+function toggleMenu(){var sb=$('sidebar'),ov=$('sidebar-overlay');if(!sb)return;var isOpen=sb.classList.contains('open');if(isOpen){sb.classList.remove('open');if(ov)ov.classList.remove('on');}else{sb.classList.add('open');if(ov)ov.classList.add('on');}}
+function closeSidebar(){var sb=$('sidebar'),ov=$('sidebar-overlay');if(sb)sb.classList.remove('open');if(ov)ov.classList.remove('on');}
 function goNav(id){
   if(CU&&CU.perfil!=='admin'&&OPERADOR_BLOQUEADOS.indexOf(id)>=0){
     $('main-content').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:12px"><i class="ti ti-lock" style="font-size:48px;color:var(--border2)"></i><p style="font-size:15px;font-weight:600;color:var(--text2)">Acesso restrito</p><p style="font-size:13px;color:var(--text3)">Este modulo e disponivel apenas para administradores.</p></div>';
-    return;
+    closeSidebar();return;
   }
+  closeSidebar();
   NAV=id;document.querySelectorAll('.nav-item').forEach(function(n){n.classList.remove('active');});var ni=$('nav-'+id);if(ni)ni.classList.add('active');var pt=$('page-title');if(pt)pt.textContent=PAGE_TITLES[id]||id;$('main-content').innerHTML='<div class="loading"><span class="spin spin-dark"></span> Carregando...</div>';var fn={dashboard:renderDashboard,alertas:renderAlertas,clientes:renderClientes,pedidos:renderPedidos,financeiro:renderFinanceiro,producao:renderProducao,importar:renderImportar,insumos:renderInsumos,relatorios:renderRelatorios,config:renderConfig};if(fn[id])fn[id]();else renderDashboard();
 }
-function toggleMenu(){var sb=$('sidebar');if(sb)sb.classList.toggle('open');}
-
-function initShell(){
-  var isA=CU.perfil==='admin';
+function initShell(){  var isA=CU.perfil==='admin';
   var un=$('user-name'),ua=$('user-avatar'),ur=$('user-role');
   if(un)un.textContent=CU.nome;if(ua)ua.textContent=CU.nome.substring(0,2).toUpperCase();
   if(ur)ur.textContent=isA?'Admin':'Operador - Imp.'+(CU.maquina||1);
