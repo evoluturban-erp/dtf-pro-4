@@ -735,16 +735,17 @@ async function finTab(t,btn){
       var ref=String(r[6]||'').replace(/'/g,"\'");
       var val=parseFloat(r[5])||0;
       var venc=String(r[4]||'').replace(/'/g,"\'");
-      var obs=String(r[10]||'').replace(/"/g,'&quot;');
-      // Extrai periodo da obs
+      var obs=String(r[9]||'').replace(/"/g,'&quot;');
+      // Extrai periodo: pode estar em r[9] (obs) ou r[10] (obs2/periodo)
       var deStr='',ateStr='';
-      if(r[10]&&String(r[10]).indexOf('periodo:')===0){
-        var pp=String(r[10]).replace('periodo:','').split(' a ');
+      var periodoSrc=String(r[10]||r[9]||'');
+      if(periodoSrc.indexOf('periodo:')===0){
+        var pp=periodoSrc.replace('periodo:','').split(' a ');
         if(pp.length===2){deStr=pp[0].trim();ateStr=pp[1].trim();}
       }
       var periodoCell=deStr?'<span style="font-size:11px;color:var(--text2)">'+deStr+'</span><br><span style="font-size:11px;color:var(--text2)">'+ateStr+'</span>':'<span style="font-size:11px;color:var(--text3)">-</span>';
       var acoes='';
-      _finObsMap[String(r[0]||'')]=String(r[10]||'');
+      _finObsMap[String(r[0]||'')]=String(r[10]||r[9]||'');
       if(!pg){
         acoes+='<button class="btn btn-xs btn-p" onclick="darBaixa(&quot;'+ts+'&quot;)" title="Dar baixa">Baixa</button> ';
         acoes+='<button class="btn btn-xs btn-b" onclick="imprimirCobranca(&quot;'+cli+'&quot;,&quot;'+ref+'&quot;,'+val+',&quot;'+venc+'&quot;)" title="Imprimir"><i class="ti ti-printer"></i></button> ';
@@ -775,21 +776,40 @@ async function finTab(t,btn){
   }
 }
 
-async function _buscarJobsCliente(cli,ref){
-  // Extrai periodo da referencia ex: "Fechamento 31/05/2026" ou "Fechamento 01/05/2026 a 31/05/2026"
+async function _buscarJobsCliente(cli,ref,deStr,ateStr){
   var pedRows=await apiGet('pedidos');
   var jobs=pedRows.slice(1).filter(function(r){
-    return String(r[3]||'').trim().toLowerCase()===cli.trim().toLowerCase()
-      && String(r[9]||'')!=='DELETADO';
+    if(String(r[3]||'').trim().toLowerCase()!==cli.trim().toLowerCase())return false;
+    if(String(r[9]||'')==='DELETADO')return false;
+    // Filtro de periodo se fornecido
+    if(deStr&&ateStr){
+      var d=String(r[1]||'');
+      var iso=d.match(/(\d{4})-(\d{2})-(\d{2})/);
+      var br=d.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      var dDate=iso?new Date(iso[1],iso[2]-1,iso[3]):br?new Date(br[3],br[2]-1,br[1]):null;
+      if(dDate){
+        var dep=deStr.split('/');var atep=ateStr.split('/');
+        var deDate=dep.length===3?new Date(dep[2],dep[1]-1,dep[0]):new Date(deStr);
+        var ateDate=atep.length===3?new Date(atep[2],atep[1]-1,atep[0]):new Date(ateStr);
+        if(dDate<deDate||dDate>ateDate)return false;
+      }
+    }
+    return true;
   });
-  // Ordena por data
   jobs.sort(function(a,b){return String(a[1]).localeCompare(String(b[1]));});
   return jobs;
 }
 
 async function imprimirCobranca(cli,ref,val,venc){
   toast('Buscando jobs...');
-  var jobs=await _buscarJobsCliente(cli,ref);
+  // Extrai periodo do _finObsMap se disponivel
+  var obsMap=(_finObsMap&&_finObsMap[cli])||'';
+  var deStr='',ateStr='';
+  // Tenta extrair da obs da conta
+  var finObs=Object.values(_finObsMap||{}).find(function(o){return o&&o.indexOf('periodo:')===0;});
+  if(finObs){var pp=finObs.replace('periodo:','').split(' a ');if(pp.length===2){deStr=pp[0].trim();ateStr=pp[1].trim();}}
+  if(!deStr){var dateFetch=ref.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(dateFetch){deStr='01/'+dateFetch[2]+'/'+dateFetch[3];ateStr=dateFetch[1]+'/'+dateFetch[2]+'/'+dateFetch[3];}}
+  var jobs=await _buscarJobsCliente(cli,ref,deStr,ateStr);
   var porDia={};
   jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
   var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
@@ -836,21 +856,7 @@ async function whatsappCobranca(cli,ref,val,venc,tsOrObs){
     var dateFetch=ref.match(/(\d{2})\/(\d{2})\/(\d{4})/);
     if(dateFetch){deStr='01/'+dateFetch[2]+'/'+dateFetch[3];ateStr=dateFetch[1]+'/'+dateFetch[2]+'/'+dateFetch[3];}
   }
-  var pedRows=_cache['pedidos']||await apiGet('pedidos');
-  var jobs=pedRows.slice(1).filter(function(r){
-    if(String(r[3]||'').trim().toLowerCase()!==cli.trim().toLowerCase())return false;
-    if(String(r[9]||'')==='DELETADO')return false;
-    if(!deStr||!ateStr)return true;
-    var d=String(r[1]||'');
-    var iso=d.match(/(\d{4})-(\d{2})-(\d{2})/);
-    var br=d.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-    var dDate=iso?new Date(iso[1],iso[2]-1,iso[3]):br?new Date(br[3],br[2]-1,br[1]):null;
-    if(!dDate)return true;
-    var dep=deStr.split('/');var atep=ateStr.split('/');
-    var deDate=new Date(dep[2],dep[1]-1,dep[0]);
-    var ateDate=new Date(atep[2],atep[1]-1,atep[0]);
-    return dDate>=deDate&&dDate<=ateDate;
-  });
+  var jobs=await _buscarJobsCliente(cli,ref,deStr||null,ateStr||null);
   jobs.sort(function(a,b){return String(a[1]).localeCompare(String(b[1]));});
   var porDia={};jobs.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
   var totM=jobs.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
@@ -889,44 +895,59 @@ async function whatsappCobranca(cli,ref,val,venc,tsOrObs){
 }
 
 async function darBaixa(ts){
-  var rows=await apiGet('financeiro');var conta=rows.slice(1).find(function(r){return r[0]===ts;});if(!conta){toast('Conta nao encontrada');return;}
-  var vT=parseFloat(conta[5])||0,cli=conta[3]||'';
+  var rows=await apiGet('financeiro');var conta=rows.slice(1).find(function(r){return String(r[0])===String(ts);});if(!conta){toast('Conta nao encontrada');return;}
+  var vT=parseFloat(conta[5])||0,cli=conta[3]||'',tipo=conta[2]||'receber';
+  var isPagar=tipo==='pagar';
   var m=document.createElement('div');m.className='modal-bg';
-  m.innerHTML='<div class="modal" style="max-width:380px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><p style="font-size:16px;font-weight:600">Registrar pagamento</p><button onclick="this.closest(\'.modal-bg\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--text2)">x</button></div>'
-    +'<div style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:14px"><p style="font-size:12px;color:var(--text2)">Cliente: <strong>'+cli+'</strong></p><p style="font-size:12px;color:var(--text2)">Valor total: <strong style="font-size:15px">'+fmtR(vT)+'</strong></p></div>'
+  m.innerHTML='<div class="modal" style="max-width:380px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><p style="font-size:16px;font-weight:600">'+(isPagar?'Registrar pagamento efetuado':'Registrar recebimento')+'</p><button onclick="this.closest(\'.modal-bg\').remove()" style="background:none;border:none;cursor:pointer;font-size:22px;color:var(--text2)">x</button></div>'
+    +'<div style="background:var(--surface2);border-radius:var(--radius);padding:12px;margin-bottom:14px"><p style="font-size:12px;color:var(--text2)">'+(isPagar?'Fornecedor':'Cliente')+': <strong>'+cli+'</strong></p><p style="font-size:12px;color:var(--text2)">Valor total: <strong style="font-size:15px">'+fmtR(vT)+'</strong></p></div>'
     +'<div class="f"><label>Tipo</label><select id="baixa-tipo" onchange="toggleBaixaParcial()"><option value="total">Pagamento total - '+fmtR(vT)+'</option><option value="parcial">Pagamento parcial</option></select></div>'
-    +'<div class="f hidden" id="baixa-parcial-field"><label>Valor pago (R$)</label><input type="number" id="baixa-valor" placeholder="0,00" min="0" step="0.01" style="font-size:16px;font-weight:600" max="'+vT+'"></div>'
+    +'<div class="f hidden" id="baixa-parcial-field"><label>Valor '+(isPagar?'pago':'recebido')+' (R$)</label><input type="number" id="baixa-valor" placeholder="0,00" min="0" step="0.01" style="font-size:16px;font-weight:600" max="'+vT+'"></div>'
     +'<div class="f"><label>Data do pagamento</label><input type="date" id="baixa-data" value="'+today()+'"></div>'
     +'<div class="f"><label>Forma de pagamento</label><select id="baixa-pgto"><option>Pix</option><option>Transferencia</option><option>Dinheiro</option><option>Boleto</option></select></div>'
     +'<div class="f"><label>Observacao</label><input id="baixa-obs" placeholder="Opcional"></div>'
-    +'<button class="btn btn-p btn-full" style="margin-top:4px" onclick="confirmarBaixa(\''+ts+'\',\''+cli.replace(/\\/g,'\\\\').replace(/'/g,'\\\'')+'\','+vT+')"><i class="ti ti-check"></i> Confirmar pagamento</button></div>';
+    +'<button class="btn btn-p btn-full" style="margin-top:4px" onclick="confirmarBaixa(\''+String(ts).replace(/'/g,"\\'")+'\',' +
+      '\''+cli.replace(/\\/g,'\\\\').replace(/'/g,'\\\'')+'\',' +
+      vT+',\''+tipo+'\')"><i class="ti ti-check"></i> Confirmar</button></div>';
   m.addEventListener('click',function(e){if(e.target===m)m.remove();});document.body.appendChild(m);
 }
 
 function toggleBaixaParcial(){var tipo=v('baixa-tipo');var f=$('baixa-parcial-field');if(f)f.classList.toggle('hidden',tipo!=='parcial');}
 
-async function confirmarBaixa(ts,cli,vT){
-  var tipo=v('baixa-tipo'),pgto=v('baixa-pgto'),obs=v('baixa-obs'),vP=vT;
-  if(tipo==='parcial'){vP=parseFloat(v('baixa-valor'))||0;if(!vP||vP<=0){toast('Informe o valor pago');return;}if(vP>vT){toast('Valor maior que o total');return;}}
-  // Data informada pelo usuario (campo baixa-data), fallback para hoje
+async function confirmarBaixa(ts,cli,vT,tipoConta){
+  tipoConta=tipoConta||'receber';
+  var isPagar=tipoConta==='pagar';
+  var baixaTipo=v('baixa-tipo'),pgto=v('baixa-pgto'),obs=v('baixa-obs'),vP=vT;
+  if(baixaTipo==='parcial'){vP=parseFloat(v('baixa-valor'))||0;if(!vP||vP<=0){toast('Informe o valor pago');return;}if(vP>vT){toast('Valor maior que o total');return;}}
   var dataPgtoISO=v('baixa-data')||today();
   var dataPgtoFmt=fmtData(dataPgtoISO);
   var saldo=Math.round((vT-vP)*100)/100;
-  await apiPost('baixas',['timestamp_orig','data_baixa','status','valor_pago','saldo','forma_pgto','obs'],[ts,dataPgtoFmt,tipo==='total'?'pago_total':'pago_parcial',vP,saldo,pgto,obs]);
-  // Atualiza status da conta original no financeiro preservando todos os campos
-  var novoStatus=saldo>0?'parcial':'recebido';
+  // Salva auditoria na aba baixas
+  await apiPost('baixas',['timestamp_orig','data_baixa','status','valor_pago','saldo','forma_pgto','obs'],[ts,dataPgtoFmt,baixaTipo==='total'?'pago_total':'pago_parcial',vP,saldo,pgto,obs]);
+  // Atualiza conta original preservando TODOS os campos existentes
+  var novoStatus=isPagar?(saldo>0?'parcial':'pago'):(saldo>0?'parcial':'recebido');
   var rowsFin=await apiGet('financeiro',true);
   var contaOrig=rowsFin.slice(1).find(function(r){return String(r[0])===String(ts);});
   if(contaOrig){
+    var obsExtra=String(contaOrig[10]||'');
+    var novaObs=(isPagar?'Pago em ':'Recebido em ')+dataPgtoFmt+(obs?' - '+obs:'');
     await apiUpsert('financeiro',0,ts,
-      ['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],
-      [contaOrig[0],contaOrig[1],contaOrig[2],contaOrig[3],contaOrig[4],contaOrig[5],contaOrig[6],pgto,novoStatus,'Recebido em '+dataPgtoFmt+(obs?' - '+obs:'')]);
+      ['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs','obs2'],
+      [contaOrig[0],contaOrig[1],contaOrig[2],contaOrig[3],contaOrig[4],contaOrig[5],contaOrig[6],pgto,novoStatus,novaObs,obsExtra]);
   }
-  var cls=await getClientes();var idx=cls.findIndex(function(c){return c.nome===cli;});
-  if(idx>=0){if(!cls[idx].historicoPagamentos)cls[idx].historicoPagamentos=[];cls[idx].historicoPagamentos.push({data:dataPgtoFmt,valorPago:vP,saldoDepois:saldo>0?saldo:0,pgto:pgto,obs:obs});cls[idx].saldoDevedor=saldo>0?saldo:0;cls[idx].ultimaBaixa=dataPgtoFmt;saveClientes(cls);syncCliente(cls[idx]);}
+  // Saldo devedor so para contas a receber
+  if(!isPagar){
+    var cls=await getClientes();var idx=cls.findIndex(function(c){return c.nome===cli;});
+    if(idx>=0){if(!cls[idx].historicoPagamentos)cls[idx].historicoPagamentos=[];cls[idx].historicoPagamentos.push({data:dataPgtoFmt,valorPago:vP,saldoDepois:saldo>0?saldo:0,pgto:pgto,obs:obs});cls[idx].saldoDevedor=saldo>0?saldo:0;cls[idx].ultimaBaixa=dataPgtoFmt;saveClientes(cls);syncCliente(cls[idx]);}
+  }
   var mb=document.querySelector('.modal-bg');if(mb)mb.remove();delete _cache['financeiro'];
-  if(saldo>0){var cli2=idx>=0?cls[idx]:null;var pV=calcVencimento(cli2?cli2.ciclo:null,dataPgtoISO);await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),dataPgtoISO,'receber',cli,pV,saldo,'Saldo devedor (pago '+fmtR(vP)+' de '+fmtR(vT)+' em '+dataPgtoFmt+')',pgto,'pendente','saldo devedor automatico']);renderFinanceiro();setTimeout(function(){abrirModalAtualizSaldo(cli,vP,saldo);},400);}
-  else{toast('Pagamento de '+fmtR(vP)+' registrado em '+dataPgtoFmt+'!');renderFinanceiro();}
+  if(!isPagar&&saldo>0){
+    var cls2=await getClientes();var cli2=cls2.find(function(c){return c.nome===cli;});var pV=calcVencimento(cli2?cli2.ciclo:null,dataPgtoISO);
+    await apiPost('financeiro',['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs'],[nowStr(),dataPgtoISO,'receber',cli,pV,saldo,'Saldo devedor (pago '+fmtR(vP)+' de '+fmtR(vT)+' em '+dataPgtoFmt+')',pgto,'pendente','saldo devedor automatico']);
+    renderFinanceiro();setTimeout(function(){abrirModalAtualizSaldo(cli,vP,saldo);},400);
+  }else{
+    toast((isPagar?'Pagamento de ':'Recebimento de ')+fmtR(vP)+' registrado em '+dataPgtoFmt+'!');renderFinanceiro();
+  }
 }
 
 function abrirModalAtualizSaldo(cli,vP,saldo){
@@ -1018,13 +1039,14 @@ async function confirmarFechamento(){
   var de=v('fech-de'),ate=v('fech-ate')||today();var venc=calcVencimento(cli&&cli.ciclo,ate);
   var porDia={};sel.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
 
-  // Verifica se ja existe cobranca pendente para esse cliente
+  // Verifica se ja existe cobranca pendente para esse cliente (busca por cliente + tipo + status, sem depender de texto da referencia)
   var finRows=await apiGet('financeiro',true);
   var cobExist=finRows.slice(1).find(function(r){
     return String(r[3]||'').trim().toLowerCase()===cliNome.trim().toLowerCase()
       && String(r[2]||'')==='receber'
-      && String(r[8]||'')==='pendente'
-      && (String(r[6]||'').toLowerCase().indexOf('fechamento')>-1||String(r[10]||'').indexOf('periodo:')>-1);
+      && (String(r[8]||'')==='pendente'||String(r[8]||'')==='parcial')
+      && String(r[8]||'')!=='recebido'
+      && String(r[8]||'')!=='pago';
   });
   var isAtualizacao=!!cobExist;
   var tsExist=cobExist?String(cobExist[0]||''):'';
@@ -1385,13 +1407,19 @@ async function removerInsumo(ts){
   toast('Item removido!');
   renderInsumos();
 }
-function renderRelatorios(){$('main-content').innerHTML='<div class="g2"><div style="margin-bottom:12px"><div class="card" style="cursor:pointer;margin-bottom:0" onclick="gerarRelProd()"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-printer" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Producao</p></div><p style="font-size:12px;color:var(--text2)">Metragem, perdas e aproveitamento por impressora</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b"><i class="ti ti-eye"></i> Ver</button></div></div><div class="card" style="cursor:pointer" onclick="gerarRelCli()"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-users" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Por cliente</p></div><p style="font-size:12px;color:var(--text2)">Faturamento, ticket medio e ranking</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b"><i class="ti ti-eye"></i> Ver</button></div></div></div><div><div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-currency-dollar" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Financeiro</p></div><p style="font-size:12px;color:var(--text2)">A receber, pagar e saldo do periodo</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b" onclick="gerarRelFin()"><i class="ti ti-eye"></i> Ver</button><button class="btn btn-sm" onclick="exportCSV(\'financeiro\')"><i class="ti ti-download"></i> CSV</button></div></div><div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-package" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Insumos</p></div><p style="font-size:12px;color:var(--text2)">Compras e gastos com materiais</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b" onclick="gerarRelIns()"><i class="ti ti-eye"></i> Ver</button><button class="btn btn-sm" onclick="exportCSV(\'insumos\')"><i class="ti ti-download"></i> CSV</button></div></div></div></div><div id="rel-output"></div>';}
+function renderRelatorios(){$('main-content').innerHTML='<div class="g2"><div style="margin-bottom:12px"><div class="card" style="cursor:pointer;margin-bottom:0" onclick="gerarRelProd()"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-printer" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Producao</p></div><p style="font-size:12px;color:var(--text2)">Metragem, perdas e aproveitamento por impressora</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b"><i class="ti ti-eye"></i> Ver</button></div></div><div class="card" style="cursor:pointer" onclick="gerarRelCli()"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-users" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Por cliente</p></div><p style="font-size:12px;color:var(--text2)">Faturamento, ticket medio e ranking</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b"><i class="ti ti-eye"></i> Ver</button></div></div></div><div><div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-currency-dollar" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Financeiro</p></div><p style="font-size:12px;color:var(--text2)">A receber, pagar e saldo do periodo</p><div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap"><input type="date" id="rel-fin-de" style="padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px"><input type="date" id="rel-fin-ate" style="padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px"><button class="btn btn-sm btn-b" onclick="gerarRelFin()"><i class="ti ti-eye"></i> Ver</button><button class="btn btn-sm" onclick="exportCSV(\'financeiro\')"><i class="ti ti-download"></i> CSV</button></div></div><div class="card"><div style="display:flex;align-items:center;gap:12px;margin-bottom:6px"><i class="ti ti-package" style="font-size:24px;color:var(--text2)"></i><p style="font-weight:600;font-size:14px">Insumos</p></div><p style="font-size:12px;color:var(--text2)">Compras e gastos com materiais</p><div style="margin-top:10px;display:flex;gap:6px"><button class="btn btn-sm btn-b" onclick="gerarRelIns()"><i class="ti ti-eye"></i> Ver</button><button class="btn btn-sm" onclick="exportCSV(\'insumos\')"><i class="ti ti-download"></i> CSV</button></div></div></div></div><div id="rel-output"></div>';}
 
 async function gerarRelProd(){var rows=await apiGet('producao');var pd=rows.slice(1);function sc(c){return pd.reduce(function(s,r){return s+(parseFloat(r[c])||0);},0);}var tot=sc(5),perd=sc(13),aprov=(tot+perd)>0?(tot/(tot+perd)*100).toFixed(1):0;var trows='';pd.forEach(function(r){var imp=(r[1]||'').toString().includes('AZUL')||r[1]==='1'?'<span class="badge b-b">Imp.1</span>':'<span class="badge b-g">Imp.2</span>';trows+='<tr><td>'+fmtData(r[2])+'</td><td>'+imp+'</td><td>'+(r[4]||'')+'</td><td><strong>'+fmt(r[5])+'m</strong></td><td>'+fmt(r[13]||0)+'m</td><td>'+fmt(r[6]||0,0)+'g</td><td>'+fmt(r[7]||0,0)+'g</td><td>'+fmt(r[8]||0,0)+'g</td><td>'+fmt(r[9]||0,0)+'g</td><td>'+fmt(r[10]||0,0)+'g</td><td>'+fmt(r[14]||0,1)+'</td></tr>';});if(!trows)trows='<tr><td colspan="11" style="text-align:center;color:var(--text3)">Nenhum dado.</td></tr>';$('rel-output').innerHTML='<div class="card"><div style="display:flex;justify-content:space-between;margin-bottom:12px"><p style="font-weight:600;font-size:15px">Relatorio de Producao</p><button class="btn btn-sm" onclick="window.print()"><i class="ti ti-printer"></i> Imprimir</button></div><div class="g4" style="margin-bottom:12px"><div class="kpi"><div class="kpi-l">Total produzido</div><div class="kpi-v">'+fmt(tot)+'m</div></div><div class="kpi"><div class="kpi-l">Perdas</div><div class="kpi-v">'+fmt(perd)+'m</div></div><div class="kpi"><div class="kpi-l">Aproveitamento</div><div class="kpi-v">'+aprov+'%</div></div><div class="kpi"><div class="kpi-l">Energia total</div><div class="kpi-v">'+fmt(sc(14),1)+' kWh</div></div></div><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>Imp.</th><th>Operador</th><th>Metros</th><th>Perdas</th><th>White</th><th>Yellow</th><th>Magenta</th><th>Cyan</th><th>Black</th><th>kWh</th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';}
 
 async function gerarRelCli(){var rows=await apiGet('pedidos');var por={};rows.slice(1).forEach(function(r){var c=r[3]||'?';if(!por[c])por[c]={jobs:0,m:0,v:0};por[c].jobs++;por[c].m+=parseFloat(r[5])||0;por[c].v+=parseFloat(r[7])||0;});var sorted=Object.entries(por).sort(function(a,b){return b[1].v-a[1].v;});var totV=sorted.reduce(function(s,x){return s+x[1].v;},0);var trows='';sorted.forEach(function(x){var n=x[0],d=x[1];trows+='<tr><td><strong>'+n+'</strong></td><td>'+d.jobs+'</td><td>'+fmt(d.m)+'m</td><td><strong>'+fmtR(d.v)+'</strong></td><td>'+fmtR(d.jobs?d.v/d.jobs:0)+'</td><td>'+(totV?(d.v/totV*100).toFixed(1):0)+'%</td></tr>';});if(!trows)trows='<tr><td colspan="6" style="text-align:center;color:var(--text3)">Nenhum dado.</td></tr>';$('rel-output').innerHTML='<div class="card"><p style="font-weight:600;font-size:15px;margin-bottom:12px">Relatorio por Cliente</p><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Cliente</th><th>Jobs</th><th>Metragem</th><th>Faturamento</th><th>Ticket medio</th><th>% total</th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';}
 
-async function gerarRelFin(){var rows=await apiGet('financeiro');var d=rows.slice(1);var rec=d.filter(function(r){return r[2]==='receber';});var pag=d.filter(function(r){return r[2]==='pagar';});function sV(a){return a.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);}var trows='';d.forEach(function(r){trows+='<tr><td>'+fmtData(r[1])+'</td><td><span class="badge '+(r[2]==='receber'?'b-g':'b-r')+'">'+r[2]+'</span></td><td>'+(r[3]||'')+'</td><td style="font-size:12px">'+(r[6]||'')+'</td><td><strong>'+fmtR(r[5])+'</strong></td><td>'+fmtData(r[4])+'</td><td><span class="badge '+(r[8]==='pago'||r[8]==='recebido'?'b-g':'b-a')+'">'+(r[8]||'pendente')+'</span></td></tr>';});if(!trows)trows='<tr><td colspan="7" style="text-align:center;color:var(--text3)">Nenhum dado.</td></tr>';$('rel-output').innerHTML='<div class="card"><p style="font-weight:600;font-size:15px;margin-bottom:12px">Relatorio Financeiro</p><div class="g3" style="margin-bottom:12px"><div class="kpi"><div class="kpi-l">Total a receber</div><div class="kpi-v" style="color:var(--green)">'+fmtR(sV(rec))+'</div></div><div class="kpi"><div class="kpi-l">Total a pagar</div><div class="kpi-v" style="color:var(--red)">'+fmtR(sV(pag))+'</div></div><div class="kpi"><div class="kpi-l">Saldo</div><div class="kpi-v">'+fmtR(sV(rec)-sV(pag))+'</div></div></div><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>Tipo</th><th>Cliente/Forn.</th><th>Referencia</th><th>Valor</th><th>Vencimento</th><th>Status</th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';}
+async function gerarRelFin(){
+  var de=v('rel-fin-de')||'',ate=v('rel-fin-ate')||'';
+  var rows=await apiGet('financeiro');var d=rows.slice(1);
+  if(de)d=d.filter(function(r){return String(r[1]||'')>=de;});
+  if(ate)d=d.filter(function(r){return String(r[1]||'')<=ate;});
+  var rec=d.filter(function(r){return r[2]==='receber';});var pag=d.filter(function(r){return r[2]==='pagar';});function sV(a){return a.reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);}var trows='';d.forEach(function(r){trows+='<tr><td>'+fmtData(r[1])+'</td><td><span class="badge '+(r[2]==='receber'?'b-g':'b-r')+'">'+r[2]+'</span></td><td>'+(r[3]||'')+'</td><td style="font-size:12px">'+(r[6]||'')+'</td><td><strong>'+fmtR(r[5])+'</strong></td><td>'+fmtData(r[4])+'</td><td><span class="badge '+(r[8]==='pago'||r[8]==='recebido'?'b-g':'b-a')+'">'+(r[8]||'pendente')+'</span></td></tr>';});if(!trows)trows='<tr><td colspan="7" style="text-align:center;color:var(--text3)">Nenhum dado.</td></tr>';$('rel-output').innerHTML='<div class="card"><p style="font-weight:600;font-size:15px;margin-bottom:12px">Relatorio Financeiro'+(de||ate?' ('+fmtData(de)+' a '+fmtData(ate)+')':'')+'</p><div class="g3" style="margin-bottom:12px"><div class="kpi"><div class="kpi-l">Total a receber</div><div class="kpi-v" style="color:var(--green)">'+fmtR(sV(rec))+'</div></div><div class="kpi"><div class="kpi-l">Total a pagar</div><div class="kpi-v" style="color:var(--red)">'+fmtR(sV(pag))+'</div></div><div class="kpi"><div class="kpi-l">Saldo</div><div class="kpi-v">'+fmtR(sV(rec)-sV(pag))+'</div></div></div><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>Tipo</th><th>Cliente/Forn.</th><th>Referencia</th><th>Valor</th><th>Vencimento</th><th>Status</th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';
+}
 
 async function gerarRelIns(){var rows=await apiGet('insumos');var d=rows.slice(1);var tot=d.reduce(function(s,r){return s+(parseFloat(r[8])||0);},0);var trows='';d.forEach(function(r){trows+='<tr><td>'+fmtData(r[1])+'</td><td>'+(r[2]||'')+'</td><td>'+(r[3]||'')+'</td><td>'+(r[4]||'')+'</td><td>'+fmt(r[6])+' '+(r[5]||'')+'</td><td>'+fmtR(r[7])+'</td><td><strong>'+fmtR(r[8])+'</strong></td></tr>';});if(!trows)trows='<tr><td colspan="7" style="text-align:center;color:var(--text3)">Nenhum dado.</td></tr>';$('rel-output').innerHTML='<div class="card"><p style="font-weight:600;font-size:15px;margin-bottom:12px">Relatorio de Insumos - Total: '+fmtR(tot)+'</p><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Data</th><th>NF</th><th>Fornecedor</th><th>Material</th><th>Qtd</th><th>Preco unit.</th><th>Subtotal</th></tr></thead><tbody>'+trows+'</tbody></table></div></div>';}
 
