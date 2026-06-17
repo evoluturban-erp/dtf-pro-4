@@ -342,14 +342,29 @@ async function doLogin(){
 function logout(){CU=null;store.del('dtf_session');$('shell').classList.add('hidden');$('login-page').classList.remove('hidden');}
 
 var _cliCache=null;
-async function getClientes(){
-  if(_cliCache)return _cliCache;
+async function getClientes(forcarSync){
+  // Sempre busca do servidor; localStorage so como fallback offline
+  if(_cliCache&&!forcarSync)return _cliCache;
+  try{
+    var rows=await apiGet('clientes',true);// true = ignora cache http
+    if(rows&&rows.length>1){
+      _cliCache=rows.slice(1).filter(function(r){return r[0];}).map(function(r){return{id:r[0],nome:r[1]||'',doc:r[2]||'',tel:r[3]||'',email:r[4]||'',ciclo:r[5]||'avulso',preco_m:parseFloat(r[6])||0,pgto:r[7]||'',pix:r[8]||'',obs:r[9]||'',dataCad:r[10]||'',saldoDevedor:parseFloat(r[11])||0,historicoPrecos:safeJSON(r[12],[]),historicoPagamentos:safeJSON(r[13],[])};});
+      store.set('dtf_clientes',_cliCache);// atualiza localStorage com dado fresco
+      return _cliCache;
+    }
+  }catch(e){}
+  // Fallback: localStorage se servidor falhou
   var local=store.get('dtf_clientes');
   if(local&&local.length){_cliCache=local;return _cliCache;}
-  try{var rows=await apiGet('clientes',false);if(rows.length>1){_cliCache=rows.slice(1).filter(function(r){return r[0];}).map(function(r){return{id:r[0],nome:r[1]||'',doc:r[2]||'',tel:r[3]||'',email:r[4]||'',ciclo:r[5]||'avulso',preco_m:parseFloat(r[6])||0,pgto:r[7]||'',pix:r[8]||'',obs:r[9]||'',dataCad:r[10]||'',saldoDevedor:parseFloat(r[11])||0,historicoPrecos:safeJSON(r[12],[]),historicoPagamentos:safeJSON(r[13],[])};});store.set('dtf_clientes',_cliCache);return _cliCache;}}catch(e){}return[];
+  return[];
 }
 function saveClientes(cls){_cliCache=cls;store.set('dtf_clientes',cls);}
-async function syncCliente(c){try{await fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({acao:'upsert',aba:'clientes',key:API_KEY,id_col:0,id_val:c.id,headers:['id','nome','doc','tel','email','ciclo','preco_m','pgto','pix','obs','dataCad','saldoDevedor','historicoPrecos','historicoPagamentos'],row:[c.id,c.nome,c.doc||'',c.tel||'',c.email||'',c.ciclo||'avulso',c.preco_m||0,c.pgto||'',c.pix||'',c.obs||'',c.dataCad||'',c.saldoDevedor||0,JSON.stringify(c.historicoPrecos||[]),JSON.stringify(c.historicoPagamentos||[])]})});}catch(e){}delete _cache['clientes'];_cliCache=null;}
+async function syncCliente(c){
+  // Atualiza cache local imediatamente (otimista)
+  if(_cliCache){var idx=_cliCache.findIndex(function(x){return x.id===c.id;});if(idx>=0)_cliCache[idx]=c;else _cliCache.push(c);store.set('dtf_clientes',_cliCache);}
+  // Envia pro servidor em background
+  _enviarServidor({acao:'upsert',aba:'clientes',key:API_KEY,id_col:0,id_val:c.id,headers:['id','nome','doc','tel','email','ciclo','preco_m','pgto','pix','obs','dataCad','saldoDevedor','historicoPrecos','historicoPagamentos'],row:[c.id,c.nome,c.doc||'',c.tel||'',c.email||'',c.ciclo||'avulso',c.preco_m||0,c.pgto||'',c.pix||'',c.obs||'',c.dataCad||'',c.saldoDevedor||0,JSON.stringify(c.historicoPrecos||[]),JSON.stringify(c.historicoPagamentos||[])]});
+}
 async function getPrecoCli(cli,dataJob){var clientes=await getClientes();var norm=String(cli||'').trim().toLowerCase();var c=clientes.find(function(x){return String(x.nome||'').trim().toLowerCase()===norm;});if(!c)return 0;var hist=c.historicoPrecos||[];if(!hist.length)return parseFloat(c.preco_m||0);if(!dataJob)return hist[hist.length-1].preco;var d=new Date(dataJob);var p=hist[0].preco;for(var i=0;i<hist.length;i++){var h=hist[i];var dv=new Date(h.dataVigencia||h.data.split('/').reverse().join('-'));if(dv<=d)p=h.preco;else break;}return p;}
 
 var _contasCache=null;
