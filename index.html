@@ -309,18 +309,18 @@ async function apiGet(aba,force){
   }
 }
 async function _gravar(params){
-  // Usa GET para gravacao - resolve CORS de vez
   try{
     var qs=Object.keys(params).map(function(k){
       var v=params[k];
-      if(typeof v==='object')v=JSON.stringify(v);
-      return encodeURIComponent(k)+'='+encodeURIComponent(v);
+      // row e headers precisam ser JSON string; outros valores ficam como estao
+      if(k==='row'||k==='headers')v=JSON.stringify(v);
+      return encodeURIComponent(k)+'='+encodeURIComponent(String(v));
     }).join('&');
     var r=await fetch(API+'?'+qs);
     var d=await r.json();
-    if(!d.ok)console.warn('DTF gravar erro:',d.erro,params.acao,params.aba);
+    if(!d.ok)console.warn('DTF erro:',d.erro,params.acao,params.aba);
     return d.ok;
-  }catch(e){console.warn('DTF gravar falhou:',e.message);return false;}
+  }catch(e){console.warn('DTF falhou:',e.message);return false;}
 }
 async function apiPost(aba,headers,row){
   // Atualiza cache local imediatamente
