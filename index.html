@@ -380,8 +380,13 @@ async function getClientes(forcarSync){
   try{
     var rows=await apiGet('clientes',!!forcarSync);
     if(rows&&rows.length>1){
-      var lista=rows.slice(1).filter(function(r){return r[0]&&r[1];}).map(_parseCli);
-      if(lista.length>0){_cliCache=lista;store.set('dtf_clientes',lista);return _cliCache;}
+      // Sem filtro restritivo - aceita qualquer linha com nome preenchido
+      var lista=rows.slice(1).filter(function(r){return r[1]&&String(r[1]).trim()!=='';}).map(_parseCli);
+      if(lista.length>0){
+        // Ordena por nome
+        lista.sort(function(a,b){return a.nome.localeCompare(b.nome,'pt-BR');});
+        _cliCache=lista;store.set('dtf_clientes',lista);return _cliCache;
+      }
     }
   }catch(e){}
   // Fallback: localStorage
