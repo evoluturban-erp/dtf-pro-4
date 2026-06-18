@@ -502,7 +502,9 @@ async function renderClientes(){
     +'<input id="cli-busca" placeholder="Buscar por nome ou telefone..." oninput="filtrarClis()" style="flex:1;min-width:160px;padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px">'
     +(isAdmin?'<select id="cli-ciclo" onchange="filtrarClis()" style="padding:8px 11px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px"><option value="">Todos os ciclos</option><option value="semanal">Semanal</option><option value="quinzenal">Quinzenal</option><option value="mensal">Mensal</option><option value="avulso">Avulso</option></select>':'<select id="cli-ciclo" style="display:none"></select>')
     +(isAdmin?'<button class="btn btn-p btn-sm" onclick="abrirFormCliente()"><i class="ti ti-plus"></i> Novo cliente</button>':'')
-    +'</div><div id="lista-clis"><div class="loading"><span class="spin spin-dark"></span></div></div>';
+    +'</div><div id="lista-clis"><div class="loading"><span class="spin spin-dark"></span> Carregando clientes...</div></div>';
+  // Aguarda busca do servidor ANTES de renderizar
+  await getClientes();
   filtrarClis();
 }
 
