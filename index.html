@@ -342,18 +342,22 @@ async function doLogin(){
 function logout(){CU=null;store.del('dtf_session');$('shell').classList.add('hidden');$('login-page').classList.remove('hidden');}
 
 var _cliCache=null;
+function _parseCli(r){
+  var dc=String(r[10]||'');
+  if(dc&&dc.indexOf('T')>-1){var dp=new Date(dc);dc=('0'+dp.getDate()).slice(-2)+'/'+ ('0'+(dp.getMonth()+1)).slice(-2)+'/'+dp.getFullYear();}
+  return{id:r[0],nome:String(r[1]||'').trim(),doc:r[2]||'',tel:r[3]||'',email:r[4]||'',ciclo:r[5]||'avulso',preco_m:parseFloat(r[6])||0,pgto:r[7]||'',pix:r[8]||'',obs:r[9]||'',dataCad:dc,saldoDevedor:parseFloat(r[11])||0,historicoPrecos:safeJSON(r[12],[]),historicoPagamentos:safeJSON(r[13],[])};
+}
 async function getClientes(forcarSync){
-  // Sempre busca do servidor; localStorage so como fallback offline
-  if(_cliCache&&!forcarSync)return _cliCache;
+  // Usa cache em memoria se disponivel e nao forcou sync
+  if(_cliCache&&_cliCache.length&&!forcarSync)return _cliCache;
   try{
-    var rows=await apiGet('clientes',true);// true = ignora cache http
+    var rows=await apiGet('clientes',!!forcarSync);
     if(rows&&rows.length>1){
-      _cliCache=rows.slice(1).filter(function(r){return r[0];}).map(function(r){return{id:r[0],nome:r[1]||'',doc:r[2]||'',tel:r[3]||'',email:r[4]||'',ciclo:r[5]||'avulso',preco_m:parseFloat(r[6])||0,pgto:r[7]||'',pix:r[8]||'',obs:r[9]||'',dataCad:r[10]||'',saldoDevedor:parseFloat(r[11])||0,historicoPrecos:safeJSON(r[12],[]),historicoPagamentos:safeJSON(r[13],[])};});
-      store.set('dtf_clientes',_cliCache);// atualiza localStorage com dado fresco
-      return _cliCache;
+      var lista=rows.slice(1).filter(function(r){return r[0]&&r[1];}).map(_parseCli);
+      if(lista.length>0){_cliCache=lista;store.set('dtf_clientes',lista);return _cliCache;}
     }
   }catch(e){}
-  // Fallback: localStorage se servidor falhou
+  // Fallback: localStorage
   var local=store.get('dtf_clientes');
   if(local&&local.length){_cliCache=local;return _cliCache;}
   return[];
@@ -363,7 +367,9 @@ async function syncCliente(c){
   // Atualiza cache local imediatamente (otimista)
   if(_cliCache){var idx=_cliCache.findIndex(function(x){return x.id===c.id;});if(idx>=0)_cliCache[idx]=c;else _cliCache.push(c);store.set('dtf_clientes',_cliCache);}
   // Envia pro servidor em background
-  _enviarServidor({acao:'upsert',aba:'clientes',key:API_KEY,id_col:0,id_val:c.id,headers:['id','nome','doc','tel','email','ciclo','preco_m','pgto','pix','obs','dataCad','saldoDevedor','historicoPrecos','historicoPagamentos'],row:[c.id,c.nome,c.doc||'',c.tel||'',c.email||'',c.ciclo||'avulso',c.preco_m||0,c.pgto||'',c.pix||'',c.obs||'',c.dataCad||'',c.saldoDevedor||0,JSON.stringify(c.historicoPrecos||[]),JSON.stringify(c.historicoPagamentos||[])]});
+  // Normaliza dataCad para DD/MM/YYYY (evita ISO com timezone)
+  var dcad=c.dataCad||'';if(dcad&&dcad.indexOf('T')>-1){var dp=new Date(dcad);dcad=('0'+dp.getDate()).slice(-2)+'/'+ ('0'+(dp.getMonth()+1)).slice(-2)+'/'+dp.getFullYear();}
+  _enviarServidor({acao:'upsert',aba:'clientes',key:API_KEY,id_col:0,id_val:c.id,headers:['id','nome','doc','tel','email','ciclo','preco_m','pgto','pix','obs','dataCad','saldoDevedor','historicoPrecos','historicoPagamentos'],row:[c.id,c.nome,c.doc||'',c.tel||'',c.email||'',c.ciclo||'avulso',c.preco_m||0,c.pgto||'',c.pix||'',c.obs||'',dcad,c.saldoDevedor||0,JSON.stringify(c.historicoPrecos||[]),JSON.stringify(c.historicoPagamentos||[])]});
 }
 async function getPrecoCli(cli,dataJob){var clientes=await getClientes();var norm=String(cli||'').trim().toLowerCase();var c=clientes.find(function(x){return String(x.nome||'').trim().toLowerCase()===norm;});if(!c)return 0;var hist=c.historicoPrecos||[];if(!hist.length)return parseFloat(c.preco_m||0);if(!dataJob)return hist[hist.length-1].preco;var d=new Date(dataJob);var p=hist[0].preco;for(var i=0;i<hist.length;i++){var h=hist[i];var dv=new Date(h.dataVigencia||h.data.split('/').reverse().join('-'));if(dv<=d)p=h.preco;else break;}return p;}
 
@@ -474,6 +480,8 @@ async function renderAlertas(){
   html+='</div>';$('main-content').innerHTML=html;checkAlertas();
 }
 async function renderClientes(){
+  // Sempre busca do servidor ao entrar na tela de clientes
+  _cliCache=null;store.del('dtf_clientes');
   var mc=$('main-content');
   var isAdmin=CU&&CU.perfil==='admin';
   mc.innerHTML='<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">'
