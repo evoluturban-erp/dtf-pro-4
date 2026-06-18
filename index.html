@@ -770,23 +770,47 @@ async function salvarPedido(){var cli=v('pd-cli').trim();if(!cli){toast('Informe
 async function recalcularPedidosZerados(){
   var rows=await apiGet('pedidos',true);
   var zerados=rows.slice(1).filter(function(r){return r[0]&&r[9]!=='DELETADO'&&(parseFloat(r[7])||0)===0&&(parseFloat(r[5])||0)>0;});
-  if(!zerados.length){toast('Nenhum pedido zerado encontrado!');return;}
-  toast('Recalculando '+zerados.length+' pedidos...');
-  var ok=0;
+  if(!zerados.length){toast('Nenhum pedido com valor zero encontrado!');return;}
+  // Avisa quantos vai processar
+  if(!confirm('Encontrados '+zerados.length+' pedidos zerados. Recalcular agora?\nIsso pode levar alguns minutos.'))return;
+  var ok=0,skip=0;
+  // Pre-carrega clientes uma vez so
+  var clientes=await getClientes();
   for(var i=0;i<zerados.length;i++){
     var r=zerados[i];
     var cli=String(r[3]||'').trim();
     var dataJob=String(r[1]||'');
     var metros=parseFloat(r[5])||0;
-    var preco=await getPrecoCli(cli,dataJob);
-    if(!preco)continue;
-    var total=(metros*preco).toFixed(2);
-    await apiUpsert('pedidos',0,r[0],
-      ['timestamp','data','periodo','cliente','num_pedido','metros','preco_m','total','maquina','status','descricao','obs'],
-      [r[0],r[1],r[2],r[3],r[4],r[5],preco,total,r[8],r[9],r[10],r[11]||'']);
+    // Busca preco direto no array ja carregado (sem await por pedido)
+    var norm=_normNome(cli);
+    var c=clientes.find(function(x){return _normNome(x.nome)===norm;});
+    if(!c)c=clientes.find(function(x){return _normNome(x.nome).indexOf(norm)===0||norm.indexOf(_normNome(x.nome))===0;});
+    if(!c||!c.preco_m){skip++;continue;}
+    var preco=parseFloat(c.preco_m)||0;
+    // Usa historico de precos se tiver
+    if(c.historicoPrecos&&c.historicoPrecos.length){
+      var d=new Date(dataJob);var p=preco;
+      for(var j=0;j<c.historicoPrecos.length;j++){var h=c.historicoPrecos[j];var dv=new Date(h.dataVigencia||h.data.split('/').reverse().join('-'));if(dv<=d)p=h.preco;}
+      preco=p;
+    }
+    if(!preco){skip++;continue;}
+    var total=Math.round(metros*preco*100)/100;
+    // Envia em background sem await - muito mais rapido
+    _enviarServidor({acao:'upsert',aba:'pedidos',key:API_KEY,id_col:0,id_val:r[0],
+      headers:['timestamp','data','periodo','cliente','num_pedido','metros','preco_m','total','maquina','status','descricao','obs'],
+      row:[r[0],r[1],r[2],r[3],r[4],r[5],preco,total,r[8],r[9],r[10],r[11]||'']});
+    // Atualiza cache local tambem
+    if(_cache['pedidos']&&_cache['pedidos'].data){
+      var idx=_cache['pedidos'].data.findIndex(function(x){return String(x[0])===String(r[0]);});
+      if(idx>=0){_cache['pedidos'].data[idx][6]=preco;_cache['pedidos'].data[idx][7]=total;}
+    }
     ok++;
+    // Atualiza toast a cada 10
+    if(ok%10===0)toast('Recalculando... '+ok+'/'+zerados.length);
+    // Pausa leve a cada 20 para nao travar o browser
+    if(ok%20===0)await new Promise(function(r){setTimeout(r,100);});
   }
-  toast(ok+' pedidos recalculados!');
+  toast(ok+' recalculados'+(skip?' | '+skip+' sem preco cadastrado':'')+'!');
   renderPedidos();
 }
 var _finDados=[];
