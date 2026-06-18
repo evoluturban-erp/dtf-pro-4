@@ -1057,6 +1057,7 @@ async function whatsappCobranca(cli,ref,val,venc,tsOrObs){
   window.open(url,'_blank');
 }
 
+function normTsJs(v){return String(v).replace(/[^0-9]/g,'');}
 async function darBaixa(ts){
   var rows=await apiGet('financeiro');var conta=rows.slice(1).find(function(r){return String(r[0])===String(ts);});if(!conta){toast('Conta nao encontrada');return;}
   var vT=parseFloat(conta[5])||0,cli=conta[3]||'',tipo=conta[2]||'receber';
@@ -1089,14 +1090,15 @@ async function confirmarBaixa(ts,cli,vT,tipoConta){
   await apiPost('baixas',['timestamp_orig','data_baixa','status','valor_pago','saldo','forma_pgto','obs'],[ts,dataPgtoFmt,baixaTipo==='total'?'pago_total':'pago_parcial',vP,saldo,pgto,obs]);
   // Atualiza conta original preservando TODOS os campos existentes
   var novoStatus=isPagar?(saldo>0?'parcial':'pago'):(saldo>0?'parcial':'recebido');
-  var rowsFin=await apiGet('financeiro',true);
-  var contaOrig=rowsFin.slice(1).find(function(r){return String(r[0])===String(ts);});
+  // Usa cache local - o registro foi gravado localmente pelo apiPost/apiUpsert
+  var rowsFin=await apiGet('financeiro',false);
+  var contaOrig=rowsFin.slice(1).find(function(r){return String(r[0])===String(ts)||normTsJs(r[0])===normTsJs(ts);});
   if(contaOrig){
     var obsExtra=String(contaOrig[10]||'');
     var novaObs=(isPagar?'Pago em ':'Recebido em ')+dataPgtoFmt+(obs?' - '+obs:'');
-    await apiUpsert('financeiro',0,ts,
-      ['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs','obs2'],
-      [contaOrig[0],contaOrig[1],contaOrig[2],contaOrig[3],contaOrig[4],contaOrig[5],contaOrig[6],pgto,novoStatus,novaObs,obsExtra]);
+    await _gravar({key:API_KEY,aba:'financeiro',acao:'upsert',id_col:0,id_val:ts,match_financeiro:'1',
+      headers:JSON.stringify(['timestamp','data','tipo','cliente','vencimento','valor','referencia','forma_pgto','status','obs','obs2']),
+      row:JSON.stringify([contaOrig[0],contaOrig[1],contaOrig[2],contaOrig[3],contaOrig[4],contaOrig[5],contaOrig[6],pgto,novoStatus,novaObs,obsExtra])});
   }
   // Saldo devedor so para contas a receber
   if(!isPagar){
@@ -1206,7 +1208,7 @@ async function confirmarFechamento(){
   var porDia={};sel.forEach(function(r){var d=r[1]||'';if(!porDia[d])porDia[d]=[];porDia[d].push(r);});
 
   // Verifica se ja existe cobranca pendente para esse cliente (busca por cliente + tipo + status, sem depender de texto da referencia)
-  var finRows=await apiGet('financeiro',true);
+  var finRows=await apiGet('financeiro',false);
   var cobExist=finRows.slice(1).find(function(r){
     return String(r[3]||'').trim().toLowerCase()===cliNome.trim().toLowerCase()
       && String(r[2]||'')==='receber'
