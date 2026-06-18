@@ -308,17 +308,35 @@ async function apiGet(aba,force){
     return[];
   }
 }
-function _enviarServidor(body){
-  try{fetch(API,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(body)});}catch(e){}
+async function _gravar(params){
+  // Usa GET para gravacao - resolve CORS de vez
+  try{
+    var qs=Object.keys(params).map(function(k){
+      var v=params[k];
+      if(typeof v==='object')v=JSON.stringify(v);
+      return encodeURIComponent(k)+'='+encodeURIComponent(v);
+    }).join('&');
+    var r=await fetch(API+'?'+qs);
+    var d=await r.json();
+    if(!d.ok)console.warn('DTF gravar erro:',d.erro,params.acao,params.aba);
+    return d.ok;
+  }catch(e){console.warn('DTF gravar falhou:',e.message);return false;}
 }
 async function apiPost(aba,headers,row){
+  // Atualiza cache local imediatamente
   if(_cache[aba]&&_cache[aba].data){_cache[aba].data.push(row);_cache[aba].ts=Date.now();}
-  _enviarServidor({acao:'append',aba:aba,headers:headers,row:row,key:API_KEY});
-  return true;
+  // Grava no servidor via GET e aguarda confirmacao
+  return await _gravar({key:API_KEY,aba:aba,acao:'append',headers:headers,row:row});
 }
 async function apiUpsert(aba,idCol,idVal,headers,row){
-  if(_cache[aba]&&_cache[aba].data){var idx=_cache[aba].data.findIndex(function(r){return String(r[idCol])===String(idVal);});if(idx>=0)_cache[aba].data[idx]=row;else _cache[aba].data.push(row);_cache[aba].ts=Date.now();}
-  _enviarServidor({acao:'upsert',aba:aba,id_col:idCol,id_val:idVal,headers:headers,row:row,key:API_KEY});
+  // Atualiza cache local imediatamente
+  if(_cache[aba]&&_cache[aba].data){
+    var idx=_cache[aba].data.findIndex(function(r){return String(r[idCol])===String(idVal);});
+    if(idx>=0)_cache[aba].data[idx]=row;else _cache[aba].data.push(row);
+    _cache[aba].ts=Date.now();
+  }
+  // Grava no servidor via GET e aguarda confirmacao
+  return await _gravar({key:API_KEY,aba:aba,acao:'upsert',id_col:idCol,id_val:idVal,headers:headers,row:row});
 }
 function syncData(){_cache={};var btn=$('btn-sync');if(btn)btn.innerHTML='<span class="spin spin-dark"></span>';setTimeout(function(){if(btn)btn.innerHTML='<i class="ti ti-refresh"></i>';goNav(NAV);},800);toast('Dados atualizados');}
 
