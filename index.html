@@ -457,27 +457,40 @@ function initShell(){  var isA=CU.perfil==='admin';
   var td=$('top-date');if(td)td.textContent=new Date().toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'short'});
   goNav(isA?'dashboard':'producao');checkAlertas();checkStatusDB();
 }
+function filtrarDash(){var de=document.getElementById('dash-de'),ate=document.getElementById('dash-ate');if(de)window._dashDe=de.value;if(ate)window._dashAte=ate.value;renderDashboard();}
+function setDashPeriodo(tipo){var now=new Date(),mes=now.getMonth(),ano=now.getFullYear();var de,ate;if(tipo==='q1'){de=new Date(ano,mes,1);ate=new Date(ano,mes,15);}else if(tipo==='q2'){de=new Date(ano,mes,16);ate=new Date(ano,mes+1,0);}else if(tipo==='mes'){de=new Date(ano,mes,1);ate=new Date(ano,mes+1,0);}else{de=new Date(2000,0,1);ate=new Date(2099,11,31);}window._dashDe=de.toISOString().split('T')[0];window._dashAte=ate.toISOString().split('T')[0];renderDashboard();}
 async function renderDashboard(){
   var prod=await apiGet('producao'),fin=await apiGet('financeiro'),ped=await apiGet('pedidos');
   var pd=prod.slice(1),fd=fin.slice(1),pedd=ped.slice(1);
   function sc(a,c){return a.reduce(function(s,r){return s+(parseFloat(r[c])||0);},0);}
   var hoje=today();
-  var venc=fd.filter(function(r){return r[8]!=='pago'&&r[8]!=='recebido'&&r[4]&&r[4]<hoje;});
+  var now=new Date(),dia=now.getDate(),mes=now.getMonth(),ano=now.getFullYear();
+  var deDate,ateDate;
+  if(dia<=15){deDate=new Date(ano,mes,1);ateDate=new Date(ano,mes,15);}
+  else{deDate=new Date(ano,mes,16);ateDate=new Date(ano,mes+1,0);}
+  var _de=window._dashDe||deDate.toISOString().split('T')[0];
+  var _ate=window._dashAte||ateDate.toISOString().split('T')[0];
+  window._dashDe=_de;window._dashAte=_ate;
+  function dentroP(d){var ds=String(d||'').split('T')[0];return ds>=_de&&ds<=_ate;}
+  var peddF=pedd.filter(function(r){return r[9]!=='DELETADO'&&dentroP(r[1]||r[0]);});
+  var pdF=pd.filter(function(r){return dentroP(r[2]);});
+  var venc=fd.filter(function(r){return r[8]!=='pago'&&r[8]!=='recebido'&&r[4]&&String(r[4]).split('T')[0]<hoje;});
   var aRec=fd.filter(function(r){return r[2]==='receber'&&r[8]!=='recebido';}).reduce(function(s,r){return s+(parseFloat(r[5])||0);},0);
-  var m1=pd.filter(function(r){return (r[1]||'').toString().includes('AZUL')||r[1]==='1';});
-  var m2=pd.filter(function(r){return (r[1]||'').toString().includes('CINZA')||r[1]==='2';});
-  var totP=sc(pd,5),totM1=sc(m1,5),totM2=sc(m2,5);
-  var por={};pedd.forEach(function(r){var c=r[3]||'?';if(!por[c])por[c]={m:0,v:0};por[c].m+=parseFloat(r[5])||0;por[c].v+=parseFloat(r[7])||0;});
+  var m1=pdF.filter(function(r){return (r[1]||'').toString().includes('AZUL')||r[1]==='1';});
+  var m2=pdF.filter(function(r){return (r[1]||'').toString().includes('CINZA')||r[1]==='2';});
+  var totP=sc(pdF,5),totM1=sc(m1,5),totM2=sc(m2,5);
+  var por={};peddF.forEach(function(r){var c=r[3]||'?';if(!por[c])por[c]={m:0,v:0};por[c].m+=parseFloat(r[5])||0;por[c].v+=parseFloat(r[7])||0;});
   var top=Object.entries(por).sort(function(a,b){return b[1].v-a[1].v;}).slice(0,5);
   var alHTML='';if(venc.length)alHTML='<div class="alert alert-r"><i class="ti ti-alert-circle"></i><div><strong>'+venc.length+' cobranca(s) vencida(s)!</strong> - <a href="#" onclick="goNav(\'alertas\')" style="color:var(--red);text-decoration:underline">Ver alertas</a></div></div>';
   var p1=totP?((totM1/totP)*100).toFixed(0):0,p2=totP?((totM2/totP)*100).toFixed(0):0;
-  var topHTML='';if(top.length){top.forEach(function(x){topHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+x[0]+'</span><span style="color:var(--text2);margin:0 8px">'+fmt(x[1].m)+'m</span><strong>'+fmtR(x[1].v)+'</strong></div>';});}else topHTML='<p style="color:var(--text3);font-size:13px">Nenhum pedido ainda.</p>';
+  var topHTML='';if(top.length){top.forEach(function(x){topHTML+='<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px"><span style="font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+x[0]+'</span><span style="color:var(--text2);margin:0 8px">'+fmt(x[1].m)+'m</span><strong>'+fmtR(x[1].v)+'</strong></div>';});}else topHTML='<p style="color:var(--text3);font-size:13px">Nenhum pedido no periodo.</p>';
   var ultH='';pd.slice(-6).reverse().forEach(function(r){var imp=(r[1]||'').toString().includes('AZUL')||r[1]==='1'?'<span class="badge b-b">Imp.1</span>':'<span class="badge b-g">Imp.2</span>';ultH+='<tr><td>'+fmtData(r[2])+'</td><td>'+imp+'</td><td>'+(r[4]||'')+'</td><td><strong>'+fmt(r[5])+'m</strong></td><td>'+fmt(r[13]||0)+'m</td><td>'+fmt(r[14]||0,1)+'</td></tr>';});
   if(!ultH)ultH='<tr><td colspan="6" style="text-align:center;color:var(--text3)">Nenhum lancamento.</td></tr>';
-  $('main-content').innerHTML=alHTML
+  var fHTML='<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px;background:var(--surface2);padding:10px 14px;border-radius:var(--radius);border:1px solid var(--border2)"><i class="ti ti-calendar" style="color:var(--text2)"></i><input type="date" id="dash-de" value="'+_de+'" onchange="filtrarDash()" style="padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px"><span style="font-size:12px;color:var(--text2)">ate</span><input type="date" id="dash-ate" value="'+_ate+'" onchange="filtrarDash()" style="padding:4px 8px;border:1px solid var(--border2);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:12px"><button class="btn btn-xs" onclick="setDashPeriodo(\'q1\')">1 Qz</button><button class="btn btn-xs" onclick="setDashPeriodo(\'q2\')">2 Qz</button><button class="btn btn-xs" onclick="setDashPeriodo(\'mes\')">Mes</button><button class="btn btn-xs btn-b" onclick="setDashPeriodo(\'tudo\')">Tudo</button></div>';
+  $('main-content').innerHTML=alHTML+fHTML
     +'<div class="g4" style="margin-bottom:16px">'
-    +'<div class="kpi"><div class="kpi-l">Producao total</div><div class="kpi-v">'+fmt(totP)+'m</div><div class="kpi-s">'+pd.length+' turnos</div></div>'
-    +'<div class="kpi"><div class="kpi-l">Faturamento</div><div class="kpi-v" style="color:var(--green)">'+fmtR(sc(pedd,7))+'</div><div class="kpi-s">'+pedd.length+' pedidos</div></div>'
+    +'<div class="kpi"><div class="kpi-l">Producao total</div><div class="kpi-v">'+fmt(totP)+'m</div><div class="kpi-s">'+pdF.length+' turnos</div></div>'
+    +'<div class="kpi"><div class="kpi-l">Faturamento</div><div class="kpi-v" style="color:var(--green)">'+fmtR(sc(peddF,7))+'</div><div class="kpi-s">'+peddF.length+' pedidos</div></div>'
     +'<div class="kpi"><div class="kpi-l">A receber</div><div class="kpi-v">'+fmtR(aRec)+'</div><div class="kpi-s">'+venc.length+' vencidas</div></div>'
     +'<div class="kpi" id="kpi-cli"><div class="kpi-l">Clientes</div><div class="kpi-v">...</div></div></div>'
     +'<div class="g2">'
@@ -494,6 +507,23 @@ async function renderDashboard(){
   checkStatusDB();
 }
 
+function filtrarDash(){
+  var de=document.getElementById('dash-de'),ate=document.getElementById('dash-ate');
+  if(de)window._dashDe=de.value;
+  if(ate)window._dashAte=ate.value;
+  renderDashboard();
+}
+function setDashPeriodo(tipo){
+  var now=new Date(),mes=now.getMonth(),ano=now.getFullYear();
+  var de,ate;
+  if(tipo==='q1'){de=new Date(ano,mes,1);ate=new Date(ano,mes,15);}
+  else if(tipo==='q2'){de=new Date(ano,mes,16);ate=new Date(ano,mes+1,0);}
+  else if(tipo==='mes'){de=new Date(ano,mes,1);ate=new Date(ano,mes+1,0);}
+  else{de=new Date(2000,0,1);ate=new Date(2099,11,31);}
+  window._dashDe=de.toISOString().split('T')[0];
+  window._dashAte=ate.toISOString().split('T')[0];
+  renderDashboard();
+}
 async function checkStatusDB(){
   var el=$('db-status');if(!el)return;
   try{
