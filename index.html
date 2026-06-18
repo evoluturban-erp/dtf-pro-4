@@ -490,7 +490,7 @@ async function renderDashboard(){
   $('main-content').innerHTML=alHTML+fHTML
     +'<div class="g4" style="margin-bottom:16px">'
     +'<div class="kpi"><div class="kpi-l">Producao total</div><div class="kpi-v">'+fmt(totP)+'m</div><div class="kpi-s">'+pdF.length+' turnos</div></div>'
-    +'<div class="kpi"><div class="kpi-l">Faturamento</div><div class="kpi-v" style="color:var(--green)">'+fmtR(sc(peddF,7))+'</div><div class="kpi-s">'+peddF.length+' pedidos</div></div>'
+    +'<div class="kpi"><div class="kpi-l">Faturado no periodo</div><div class="kpi-v" style="color:var(--green)">'+fmtR(sc(peddF,7))+'</div><div class="kpi-s" style="font-size:11px">Recebido: <strong style="color:var(--green)">'+fmtR(fd.filter(function(r){return (r[8]==="recebido"||r[8]==="pago")&&dentroP(r[1]||r[0]);}).reduce(function(s,r){return s+(parseFloat(r[5])||0);},0))+'</strong></div></div>'
     +'<div class="kpi"><div class="kpi-l">A receber</div><div class="kpi-v">'+fmtR(aRec)+'</div><div class="kpi-s">'+venc.length+' vencidas</div></div>'
     +'<div class="kpi" id="kpi-cli"><div class="kpi-l">Clientes</div><div class="kpi-v">...</div></div></div>'
     +'<div class="g2">'
